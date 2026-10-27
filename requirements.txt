@@ -1,0 +1,5 @@
+# Cleanroom runtime and tests.
+# The hook and detector use only the Python standard library. These are needed for
+# the quarantine subagent's model call and for running the test suite.
+requests>=2.31
+pytest>=7.0

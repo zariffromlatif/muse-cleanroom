@@ -42,7 +42,7 @@
     "headline": "With Cleanroom: task done, nothing leaked",
     "model": "meta-models/muse-spark-open-1026",
     "input_secret_free": true,
-    "output": "{\"app\": \"notifications-service\", \"version\": \"1.0\"}",
+    "output": "{\n  \"app\": \"notifications-service\",\n  \"version\": \"1.0\"\n}",
     "output_secret_free": true,
     "ok": true,
     "detail": "The blocked step was re-run by a quarantine subagent on a Meta model, given the context with the secret scrubbed out and proven secret-free. It produced a valid manifest with no .env in it."

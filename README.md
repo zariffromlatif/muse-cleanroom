@@ -6,7 +6,7 @@ Cleanroom is a plugin for Meta's [Muse Code](https://dev.meta.ai/docs/muse-code)
 ["Agents Rule of Two"](https://ai.meta.com/blog/practical-ai-agent-security/) at runtime, and when a session crosses the
 line it does not just block the agent, it **finishes the task safely on a Meta model**.
 
-> Status: day 6 of the build. Solo entry, Meta Global AI Developer Hackathon, 27 Oct – 4 Nov 2026.
+> Solo entry, Meta Global AI Developer Hackathon, 27 Oct – 4 Nov 2026. See the commit history for the day-by-day build.
 
 ## The problem
 
@@ -51,8 +51,9 @@ the Rule of Two prescribes, and the task still ships.
 
 ## Results
 
-Five scenarios run through the real hook in three modes. `off` = no guard, `block` = deny on trip, `quarantine` =
-re-run safely. Each cell is `leaked? / task outcome`. The quarantine column is reproduced on the real Meta model.
+Five scenarios, each a scripted trace of the tool calls an agent makes, driven through the real hook in three modes.
+`off` = no guard, `block` = deny on trip, `quarantine` = re-run safely. Each cell is `leaked? / task outcome`. The
+quarantine column is reproduced on the real Meta model.
 
 | Scenario | Kind | off | block | quarantine |
 |---|---|---|---|---|
@@ -76,13 +77,22 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 ## Run it
 
 ```
-pip install requests openai pytest
+pip install -r requirements.txt
 python -m pytest hooks -q            # 23 tests: detector, hook, state machine, quarantine
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
+python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
 ```
 
-The live quarantine needs `BASETEN_API_KEY` in the environment.
+The live quarantine needs `BASETEN_API_KEY` in the environment. The hook and detector use
+only the Python standard library; `requests` is only for the quarantine model call.
+
+## Install into Muse Code
+
+Cleanroom is wired through [`.muse/hooks.json`](.muse/hooks.json), which points Muse Code's
+`SessionStart`, `PreToolUse`, `PostToolUse`, `SubagentStart` and `SessionEnd` events at the
+hook. Drop this repo in as a project and the guard is active; no other setup. The hook fails
+safe: if it ever errors, Muse Code blocks the tool rather than letting it through.
 
 ## Honest limits
 
@@ -97,11 +107,12 @@ The live quarantine needs `BASETEN_API_KEY` in the environment.
 
 Everything here was written during the building period (27 Oct – 4 Nov 2026), from an empty folder; the commit history is
 the record. Third-party software used but not written here: Muse Code (the agent being protected), the Python standard
-library, `requests`/`openai` (API clients), and Muse Spark Open served by Baseten (the quarantine model).
+library, `requests` (the API client), and Muse Spark Open served by Baseten (the quarantine model).
 
 ## Layout
 
 ```
+.muse/hooks.json           wires Cleanroom into Muse Code's lifecycle events
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
@@ -109,8 +120,11 @@ hooks/test_*.py            23 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder
-sandbox/                   throwaway cases that exercise the agent; FAKE secrets only
+demo/run_demo.py           builds the flight recorder from one real session
+demo/flight_recorder.html  the self-contained demo view (open in a browser)
+docs/video-script.md       the 3-minute demo script
 docs/lessons/              notes written while building
+sandbox/                   throwaway cases that exercise the agent; FAKE secrets only
 ```
 
 ## License
