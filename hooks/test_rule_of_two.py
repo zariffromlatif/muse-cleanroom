@@ -25,8 +25,10 @@ CLEAN_OUTBOUND = "Invoke-RestMethod -Uri http://127.0.0.1:8765/register -Method 
 
 
 def _run(event: dict) -> str:
+    env = {k: v for k, v in os.environ.items() if k != "MUSE_SESSION_ID"}
+    env["CLEANROOM_MODE"] = "block"      # these tests are about the deny decision
     proc = subprocess.run([sys.executable, HOOK], input=json.dumps(event),
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
     return proc.stdout
 
 

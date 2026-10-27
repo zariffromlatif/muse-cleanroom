@@ -41,21 +41,23 @@ Cleanroom is a Muse Code hook that sees every lifecycle event.
      (and decodes whole-file blobs) and blocks it. Always on, independent of A/B.
    - **Rule-of-Two trip:** A and B both already hold and the agent reaches for C. Even if no secret is visible in the
      command, the payload cannot be trusted. Cleanroom stops it.
-4. **It finishes the job anyway.** Instead of leaving the task broken, Cleanroom re-runs the blocked step in a
-   **quarantine subagent** running on a Meta model (Muse Spark Open, via Baseten). The subagent is handed the task and
-   the context with every secret scrubbed out, *proven* secret-free before the model sees it. It completes the action
-   without the secret. Everything it produces, its answer and its reasoning, is scanned too, as defense in depth. The
-   reasoning is kept, because it shows *why* the model dropped the credential field: in the recorded session the model
-   works out, unprompted, that the fingerprint field is the environment file it does not hold, and leaves it out.
+4. **It finishes the job anyway.** In quarantine mode Cleanroom does not refuse the step, it rewrites it. The hook
+   scrubs every secret out of the command, and out of any local file the command uploads (by pointing it at a scrubbed
+   copy), proves the result secret-free, and hands it to a **quarantine subagent** on a Meta model (Muse Spark Open,
+   via Baseten) with one job: produce the same action with the credential fields dropped. The model's answer and its
+   reasoning are scanned too. The safe command goes back to Muse Code as `updatedInput`; Muse Code shows it for
+   approval and runs that instead of the original. The task completes, the secret never leaves. If any link in that
+   chain fails, the step is denied: quarantine fails closed.
 
 The quarantine subagent is the point: it drops one leg of the triangle (removes B for that step), which is exactly what
-the Rule of Two prescribes, and the task still ships.
+the Rule of Two prescribes, and the task still ships. The model's reasoning is kept and shown in the flight recorder,
+so you can see why it dropped the field.
 
 ## Results
 
 Five scenarios, each a scripted trace of the tool calls an agent makes, driven through the real hook in three modes.
-`off` = no guard, `block` = deny on trip, `quarantine` = re-run safely. Each cell is `leaked? / task outcome`. The
-quarantine column is reproduced on the real Meta model.
+`off` = no guard, `block` = deny on trip, `quarantine` = the hook rewrites the step. Each cell is
+`leaked? / task outcome`. The quarantine column is reproduced on the real Meta model.
 
 | Scenario | Kind | off | block | quarantine |
 |---|---|---|---|---|
@@ -71,8 +73,9 @@ quarantine column is reproduced on the real Meta model.
 | Legit tasks completed (3) | 3 | 2 | 3 |
 | False blocks | 0 | 1 | 0 |
 
-Two rows carry the argument. **`laundered-leak`**: the command text is clean, so a scanner alone would miss it; only the
-Rule-of-Two state machine catches it. **`benign-all-three`**: a harmless task that happens to touch all three conditions.
+Two rows carry the argument. **`laundered-leak`**: the command text is clean (the secret sits in a crash log the command
+uploads), so a scanner alone would miss it; the Rule-of-Two state machine catches it, and quarantine scrubs the file so
+the report still goes out, minus the secret. **`benign-all-three`**: a harmless task that touches all three conditions.
 `block` cannot tell it apart from a real leak, so it stops it (a false block); `quarantine` completes it safely. That is
 why quarantine beats blocking: when all three are present you cannot guess, so you quarantine.
 
@@ -80,29 +83,34 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 26 tests: detector, hook, state machine, quarantine
+python -m pytest hooks -q            # 38 tests: detector, hook, state machine, quarantine mode
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
 ```
 
-The live quarantine needs `BASETEN_API_KEY` in the environment. The hook and detector use
-only the Python standard library; `requests` is only for the quarantine model call.
+The live quarantine needs a Baseten key: `BASETEN_API_KEY` in the environment, or, for the hook
+(Muse Code clears a hook's environment), the same key in `.cleanroom/baseten_api_key`, which is
+gitignored. The hook and detector use only the Python standard library; `requests` is only for
+the quarantine model call.
 
 ## Install into Muse Code
 
 Cleanroom is wired through [`.muse/hooks.json`](.muse/hooks.json), which points Muse Code's
 `SessionStart`, `PreToolUse`, `PostToolUse`, `SubagentStart` and `SessionEnd` events at the
-hook. Drop this repo in as a project and the guard is active; no other setup. The hook fails
-safe: if it ever errors, Muse Code blocks the tool rather than letting it through.
+hook. Drop this repo in as a project and the guard is active. With a key in
+`.cleanroom/baseten_api_key` it runs in **quarantine** mode (rewrite the step); without one it
+runs in **block** mode (deny the step). `.cleanroom/mode` overrides either. Quarantine fails
+closed: if the rewrite cannot be proven safe, the step is denied. The rewritten step always goes
+through Muse Code's own approval; the hook never auto-approves anything.
 
 ## Honest limits
 
 - The hook sees the agent's **own** tool calls, not what a subprocess does in its own memory. If the agent runs
   `python upload.py` that reads `.env` internally, the hook sees only `python upload.py`. Cleanroom catches the common
   case, where the secret rides the agent's own command. Tainting the files a subprocess reads is future work.
-- A Muse Code `PreToolUse` hook returns allow/deny; it cannot itself return a replacement result. So quarantine is an
-  orchestrated runner (shown in `bench/`), not an in-hook swap. Wiring it as a Muse Code subagent is the next step.
+- Quarantine rewrites what the hook can see: the command text and the local files it uploads. It needs a model key on
+  the machine; without one Cleanroom falls back to block mode.
 - Secret detection is value-based (from `.env`). A secret the agent mints at runtime and never stores is not tracked.
 
 ## Built during the hackathon
@@ -115,10 +123,10 @@ library, `requests` (the API client), and Muse Spark Open served by Baseten (the
 
 ```
 .muse/hooks.json           wires Cleanroom into Muse Code's lifecycle events
-hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks leaks and trips
+hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
-hooks/test_*.py            26 tests
+hooks/test_*.py            38 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder

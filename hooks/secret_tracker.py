@@ -121,9 +121,19 @@ def redact_all(blob: str, secrets: dict[str, str]) -> tuple[str, list[str]]:
 
     Used to scrub the context before it is handed to a quarantine subagent, so the
     subagent never receives a secret. This is best-effort by itself; the caller must
-    still run scan() on the result to GUARANTEE no secret slipped through (scan has a
-    decode pass that catches, e.g., base64 of a whole file, which this does not)."""
+    still run scan() on the result to GUARANTEE no secret slipped through."""
     removed: list[str] = []
+    # First pass: a base64/hex run that decodes to text holding a secret (a whole .env
+    # file, say) matches no single-secret variant, so it is replaced as one unit. This
+    # runs first so the variant pass below cannot split such a run into fragments.
+    for token in set(re.findall(r"[A-Za-z0-9+/=_-]{12,}", blob)):
+        decoded = _try_decode(token)
+        if decoded and any(s in decoded for s in secrets.values()):
+            blob = blob.replace(token, "<ENV_BLOB:REDACTED>")
+            for key, s in secrets.items():
+                if s in decoded and key not in removed:
+                    removed.append(key)
+    # Second pass: every known encoding of every secret.
     for key, secret in secrets.items():
         for form in _variants(secret).values():
             if form and form in blob:

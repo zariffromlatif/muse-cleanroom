@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, asdict
 from typing import Callable
@@ -36,6 +37,20 @@ import secret_tracker as st  # noqa: E402
 
 BASETEN_URL = "https://inference.baseten.co/v1/chat/completions"
 BASETEN_MODEL = "meta-models/muse-spark-open-1026"
+# Muse Code clears a hook's environment, so the key can also live here (gitignored).
+KEY_FILE = os.path.join(os.path.dirname(HOOK_DIR), ".cleanroom", "baseten_api_key")
+
+# The task given to the subagent when the hook quarantines an outward command.
+REWRITE_TASK = (
+    "Rewrite the shell command below so it performs the same action without any "
+    "credential, API key, token, password, or environment-file content. A field whose "
+    "value shows as <NAME:REDACTED> or <ENV_BLOB:REDACTED> held a secret: remove that "
+    "field entirely, do not leave it empty. Also remove anything else that looks like a "
+    "credential. Keep every other part of the command exactly as it is. Output only the "
+    "rewritten command, on one line, with no explanation and no code fences."
+)
+CONTEXT_MARK = "CONTEXT (already stripped of any secret):\n"
+TAIL_MARK = "\n\nProduce only the result the task asks for."
 
 SYSTEM_PROMPT = (
     "You are a quarantined subagent inside a security sandbox. You have NO access to "
@@ -64,11 +79,50 @@ class QuarantineResult:
 
 
 def build_prompt(task: str, clean_context: str) -> str:
-    return (
-        f"TASK:\n{task.strip()}\n\n"
-        f"CONTEXT (already stripped of any secret):\n{clean_context.strip()}\n\n"
-        "Produce only the result the task asks for."
-    )
+    return f"TASK:\n{task.strip()}\n\n{CONTEXT_MARK}{clean_context.strip()}{TAIL_MARK}"
+
+
+def api_key() -> str:
+    """The quarantine model key: the environment first, then the gitignored key file."""
+    key = os.environ.get("BASETEN_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        with open(KEY_FILE, encoding="utf-8-sig") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _strip_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[A-Za-z0-9_-]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def quarantine_command(command: str, secrets: dict, generate, model_name: str = "stub") -> QuarantineResult:
+    """Rewrite an outward shell command so it carries no secret. The command text is
+    the context: scrubbed, proven secret-free, rewritten by the model, scanned again."""
+    r = run_quarantine(REWRITE_TASK, command, secrets, generate, model_name)
+    if r.ok:
+        r.output = _strip_fences(r.output)
+        if not r.output:
+            r.ok = False
+            r.notes = "refused: the subagent returned an empty command."
+    return r
+
+
+def stub_generate(prompt: str) -> tuple[str, str]:
+    """Deterministic stand-in for the model, for tests and the offline benchmark: returns
+    the scrubbed command with every JSON field whose value was redacted removed."""
+    ctx = prompt
+    if CONTEXT_MARK in prompt:
+        ctx = prompt.split(CONTEXT_MARK, 1)[1].split(TAIL_MARK, 1)[0]
+    cmd = re.sub(r',?\s*"[^"]+"\s*:\s*"[^"]*REDACTED>[^"]*"', "", ctx.strip())
+    cmd = re.sub(r"\{\s*,\s*", "{", cmd)
+    return cmd, "stub: removed the fields whose value was redacted"
 
 
 def run_quarantine(
@@ -127,9 +181,9 @@ def meta_generate(prompt: str, max_tokens: int = 3000) -> tuple[str, str]:
     Returns `(answer, reasoning)`; the reasoning is what the demo shows."""
     import requests  # local import so tests never need the network
 
-    key = os.environ.get("BASETEN_API_KEY")
+    key = api_key()
     if not key:
-        raise RuntimeError("BASETEN_API_KEY is not set")
+        raise RuntimeError("no model key: set BASETEN_API_KEY or write .cleanroom/baseten_api_key")
     resp = requests.post(
         BASETEN_URL,
         headers={"Authorization": f"Api-Key {key}", "Content-Type": "application/json"},

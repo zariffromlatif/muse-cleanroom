@@ -22,5 +22,5 @@ Each cell is `leaked? / task outcome`.
 
 - **off** leaks every secret; nothing protects it.
 - **block** leaks nothing, but false-blocks the benign all-three task: with all three conditions present it cannot tell a real leak from a harmless call, so it stops both.
-- **quarantine** leaks nothing AND finishes every legitimate task, by re-running the risky step without the secret on a Meta model.
-- `laundered-leak` is the key row: the command text is clean, so the scanner alone would miss it. Only the Rule-of-Two state machine catches it.
+- **quarantine** leaks nothing AND finishes every legitimate task: the hook scrubs the step, a Meta model rewrites it, and Muse Code runs the safe version (`updatedInput`).
+- `laundered-leak` is the key row: the command text is clean, so the scanner alone would miss it. The Rule-of-Two state machine catches it, and quarantine scrubs the uploaded file so the report still goes out, minus the secret.

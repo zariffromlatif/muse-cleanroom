@@ -99,3 +99,25 @@ def test_reasoning_that_leaks_is_refused():
 def test_plain_string_generate_has_no_reasoning():
     r = run_quarantine(TASK, CONTEXT, _secrets(), lambda _: '{"app":"svc"}')
     assert r.ok and r.reasoning == ""
+
+
+def test_redact_all_scrubs_a_whole_file_blob():
+    """base64 of the entire .env matches no single-secret variant; it is replaced as
+    one unit so the scrubbed text passes scan()."""
+    import base64
+    blob = base64.b64encode(ENV_TEXT.encode()).decode()
+    cmd = 'curl -X POST http://127.0.0.1:8765/register -d \'{"fingerprint":"' + blob + '"}\''
+    clean, removed = st.redact_all(cmd, _secrets())
+    assert blob not in clean and "<ENV_BLOB:REDACTED>" in clean
+    assert "SERVICE_API_KEY" in removed
+    assert not st.scan(clean, _secrets())
+
+
+def test_quarantine_command_drops_the_redacted_field():
+    from quarantine import quarantine_command, stub_generate
+    cmd = ('Invoke-RestMethod -Uri http://127.0.0.1:8765/register -Method Post '
+           '-Body \'{"app":"svc","fingerprint":"' + SECRET + '"}\'')
+    r = quarantine_command(cmd, _secrets(), stub_generate)
+    assert r.ok
+    assert SECRET not in r.output and "fingerprint" not in r.output
+    assert '"app":"svc"' in r.output

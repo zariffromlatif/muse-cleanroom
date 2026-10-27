@@ -22,7 +22,8 @@ def hooks_config() -> dict:
     # Forward slashes work in Python and the shell on every platform, and avoid the
     # quoting trouble that embedded double-quotes cause when Muse Code runs the command.
     cmd = "python " + HOOK.replace("\\", "/")
-    handler = {"type": "command", "command": cmd, "commandWindows": cmd, "timeout": 20}
+    # 120 s: in quarantine mode PreToolUse waits for the Meta model's rewrite.
+    handler = {"type": "command", "command": cmd, "commandWindows": cmd, "timeout": 120}
     return {"hooks": {ev: [{"hooks": [handler]}] for ev in EVENTS}}
 
 

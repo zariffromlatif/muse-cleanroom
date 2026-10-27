@@ -26,12 +26,15 @@ ENV_TEXT = (
 
 
 def _run(event: dict) -> str:
-    """Run the hook with one event; return its stdout."""
+    """Run the hook with one event in block mode; return its stdout."""
+    env = {k: v for k, v in os.environ.items() if k != "MUSE_SESSION_ID"}
+    env["CLEANROOM_MODE"] = "block"
     proc = subprocess.run(
         [sys.executable, HOOK],
         input=json.dumps(event),
         capture_output=True,
         text=True,
+        env=env,
     )
     return proc.stdout
 
