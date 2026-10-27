@@ -44,7 +44,9 @@ Cleanroom is a Muse Code hook that sees every lifecycle event.
 4. **It finishes the job anyway.** Instead of leaving the task broken, Cleanroom re-runs the blocked step in a
    **quarantine subagent** running on a Meta model (Muse Spark Open, via Baseten). The subagent is handed the task and
    the context with every secret scrubbed out, *proven* secret-free before the model sees it. It completes the action
-   without the secret. Its output is scanned too, as defense in depth.
+   without the secret. Everything it produces, its answer and its reasoning, is scanned too, as defense in depth. The
+   reasoning is kept, because it shows *why* the model dropped the credential field: in the recorded session the model
+   itself calls the integration's request "over-collection" and omits the fingerprint.
 
 The quarantine subagent is the point: it drops one leg of the triangle (removes B for that step), which is exactly what
 the Rule of Two prescribes, and the task still ships.
@@ -78,7 +80,7 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 23 tests: detector, hook, state machine, quarantine
+python -m pytest hooks -q            # 26 tests: detector, hook, state machine, quarantine
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -116,14 +118,12 @@ library, `requests` (the API client), and Muse Spark Open served by Baseten (the
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
-hooks/test_*.py            23 tests
+hooks/test_*.py            26 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder
 demo/run_demo.py           builds the flight recorder from one real session
 demo/flight_recorder.html  the self-contained demo view (open in a browser)
-docs/video-script.md       the 3-minute demo script
-docs/lessons/              notes written while building
 sandbox/                   throwaway cases that exercise the agent; FAKE secrets only
 ```
 

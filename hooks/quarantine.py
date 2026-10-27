@@ -9,14 +9,17 @@ step in a fresh subagent that has NO access to the secret:
      If a secret still shows up, refuse -- we never hand a secret to the subagent.
   3. Ask a Meta model (the subagent) to complete the action using only that clean
      context. The model is told it has no credentials and must never emit one.
-  4. Scan the subagent's output too (defense in depth). If the output somehow
-     contains a secret, refuse.
+  4. Scan everything the subagent produced, its answer and its reasoning, too
+     (defense in depth). If a secret somehow shows up in either, refuse.
 
 The subagent runs on a Meta model (Muse Spark). That is deliberate: the model is
 what completes the task safely, so Meta's tooling is central, not incidental.
 
-The model call is injected as a `generate(prompt) -> str` callable so the logic can
-be tested deterministically with a stub, and run for real with `meta_generate`.
+The model call is injected as a `generate(prompt)` callable so the logic can be
+tested deterministically with a stub, and run for real with `meta_generate`. It may
+return the answer as a `str`, or `(answer, reasoning)` for a reasoning model: the
+reasoning is kept (so a demo can show *why* the model dropped a field) and scanned
+like any other model output.
 """
 from __future__ import annotations
 
@@ -53,6 +56,8 @@ class QuarantineResult:
     output_secret_free: bool # the subagent's output carried no secret
     removed_keys: list       # which secrets were scrubbed from the context
     notes: str
+    reasoning: str = ""      # the model's reasoning, if it is a reasoning model
+    reasoning_secret_free: bool = True  # the reasoning carried no secret either
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -70,7 +75,7 @@ def run_quarantine(
     task: str,
     context: str,
     secrets: dict,
-    generate: Callable[[str], str],
+    generate: Callable[[str], str | tuple[str, str]],
     model_name: str = "stub",
 ) -> QuarantineResult:
     # 1) scrub, then 2) GUARANTEE secret-free by scanning.
@@ -86,25 +91,40 @@ def run_quarantine(
 
     # 3) run the subagent on clean context only.
     prompt = build_prompt(task, clean_context)
-    output = generate(prompt) or ""
+    output, reasoning = _split(generate(prompt))
 
-    # 4) defense in depth: the output must also be secret-free.
-    out_hits = st.scan(output, secrets)
-    output_secret_free = not out_hits
-    ok = input_secret_free and output_secret_free
-    notes = "completed" if ok else "refused: the subagent's output contained a secret."
+    # 4) defense in depth: everything the model produced must be secret-free.
+    output_secret_free = not st.scan(output, secrets)
+    reasoning_secret_free = not st.scan(reasoning, secrets)
+    ok = input_secret_free and output_secret_free and reasoning_secret_free
+    if ok:
+        notes = "completed"
+    elif not output_secret_free:
+        notes = "refused: the subagent's output contained a secret."
+    else:
+        notes = "refused: the subagent's reasoning contained a secret."
     return QuarantineResult(
         ok=ok, output=output, model=model_name,
         input_secret_free=input_secret_free, output_secret_free=output_secret_free,
         removed_keys=removed, notes=notes,
+        reasoning=reasoning, reasoning_secret_free=reasoning_secret_free,
     )
 
 
-def meta_generate(prompt: str, max_tokens: int = 3000) -> str:
-    """Call a Meta model (Muse Spark, open weights) on Baseten as the subagent.
+def _split(result) -> tuple[str, str]:
+    """A plain `str` is the answer; `(answer, reasoning)` comes from a reasoning model."""
+    if isinstance(result, tuple):
+        answer, reasoning = result
+        return (answer or ""), (reasoning or "")
+    return (result or ""), ""
+
+
+def meta_generate(prompt: str, max_tokens: int = 3000) -> tuple[str, str]:
+    """Call a Meta model (Muse Spark Open) on Baseten as the subagent.
 
     Muse Spark is a reasoning model: it spends tokens on `reasoning_content` and puts
-    the answer in `content`. The budget must cover both, so max_tokens is generous."""
+    the answer in `content`. The budget must cover both, so max_tokens is generous.
+    Returns `(answer, reasoning)`; the reasoning is what the demo shows."""
     import requests  # local import so tests never need the network
 
     key = os.environ.get("BASETEN_API_KEY")
@@ -125,7 +145,9 @@ def meta_generate(prompt: str, max_tokens: int = 3000) -> str:
         timeout=90,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    msg = resp.json()["choices"][0]["message"]
+    reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
+    return (msg.get("content") or ""), reasoning
 
 
 def _demo(case_dir: str) -> int:

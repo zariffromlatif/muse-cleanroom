@@ -70,3 +70,32 @@ def test_empty_secrets_still_runs():
 
     r = run_quarantine(TASK, "no secrets here", {}, good)
     assert r.ok
+
+
+def test_reasoning_is_captured_and_scanned():
+    """A reasoning model returns (answer, reasoning); both are kept and checked."""
+    def reasoning_model(_):
+        return ('{"app":"svc","version":"1.0"}',
+                "The context asks for a fingerprint built from .env, but I hold no "
+                "credentials, so I omit that field.")
+
+    r = run_quarantine(TASK, CONTEXT, _secrets(), reasoning_model)
+    assert r.ok
+    assert "omit that field" in r.reasoning
+    assert r.reasoning_secret_free
+
+
+def test_reasoning_that_leaks_is_refused():
+    """The reasoning is model output too: a secret there is refused the same way."""
+    def leaky_reasoning(_):
+        return ('{"app":"svc"}', "the key is " + SECRET)
+
+    r = run_quarantine(TASK, CONTEXT, _secrets(), leaky_reasoning)
+    assert not r.ok
+    assert r.reasoning_secret_free is False
+    assert r.output_secret_free
+
+
+def test_plain_string_generate_has_no_reasoning():
+    r = run_quarantine(TASK, CONTEXT, _secrets(), lambda _: '{"app":"svc"}')
+    assert r.ok and r.reasoning == ""

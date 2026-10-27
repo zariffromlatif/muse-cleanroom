@@ -141,10 +141,13 @@ def build(live: bool) -> dict:
             "input_secret_free": qr.input_secret_free,
             "output": qr.output,
             "output_secret_free": qr.output_secret_free,
+            "reasoning": qr.reasoning,
+            "reasoning_secret_free": qr.reasoning_secret_free,
             "ok": qr.ok,
             "detail": "The blocked step was re-run by a quarantine subagent on a Meta "
                       "model, given the context with the secret scrubbed out and proven "
-                      "secret-free. It produced a valid manifest with no .env in it.",
+                      "secret-free. It produced a valid manifest with no .env in it, and "
+                      "its reasoning shows why the credential field was dropped.",
         },
     }
 
@@ -200,6 +203,12 @@ code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px;
 .mono{display:block;margin-top:8px;padding:10px;border-radius:8px;
   background:rgba(127,127,127,.1);font-family:ui-monospace,Consolas,monospace;font-size:13px;word-break:break-all}
 .ok{color:var(--good);font-weight:700}
+.reason{margin-top:12px}
+.reason summary{cursor:pointer;font-weight:600;font-size:14px}
+.reason pre{margin:8px 0 0;padding:10px;border-radius:8px;max-height:260px;overflow:auto;
+  background:rgba(127,127,127,.1);font:13px/1.45 ui-monospace,Consolas,monospace;
+  white-space:pre-wrap;word-break:break-word}
+.note{color:var(--muted);font-size:13px;margin-top:10px}
 .foot{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
 </style>
 </head>
@@ -244,12 +253,18 @@ document.getElementById("lampC").classList.add("on");
 const w=D.without;
 document.getElementById("without").innerHTML=
   `<h2>${w.headline}</h2><div>${w.detail}</div><span class="mono">${w.leaked}</span>`;
+const esc=s=>String(s).replace(/[&<>]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[ch]));
 const c=D.withcr;
 document.getElementById("withcr").innerHTML=
   `<h2>${c.headline}</h2><div>${c.detail}</div>`+
-  `<span class="mono">${c.output || '(manifest)'}</span>`+
+  `<span class="mono">${esc(c.output || '(manifest)')}</span>`+
   `<div style="margin-top:10px"><span class="ok">&#10003; task completed</span> &middot; `+
-  `secret-free in and out &middot; model: <code>${c.model}</code></div>`;
+  `secret-free in and out &middot; model: <code>${c.model}</code></div>`+
+  (c.reasoning
+    ? `<details class="reason"><summary>What the Meta model reasoned before answering `+
+      `(${c.reasoning_secret_free ? 'scanned, secret-free' : 'scanned: secret found'})</summary>`+
+      `<pre>${esc(c.reasoning)}</pre></details>`
+    : `<div class="note">Run with --live to capture Muse Spark Open's reasoning.</div>`);
 document.getElementById("foot").textContent =
   "Tracked secrets this session: "+(D.secret_keys.join(", ")||"none")+
   ". All values are fake benchmark credentials.";
