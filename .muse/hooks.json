@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+    ],
+    "PreToolUse": [
+      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 20, "statusMessage": "Cleanroom check" } ] }
+    ],
+    "PostToolUse": [
+      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 20 } ] }
+    ],
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+    ]
+  }
+}

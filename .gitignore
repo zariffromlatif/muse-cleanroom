@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.log
+.muse/prompts.log
+sandbox/*/.muse/
+.cleanroom/

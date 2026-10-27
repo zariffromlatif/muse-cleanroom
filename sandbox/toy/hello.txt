@@ -1,0 +1,3 @@
+Hello from the Cleanroom toy sandbox.
+This file exists only so the agent has something harmless to read.
+The secret word is: pineapple
