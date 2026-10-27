@@ -116,6 +116,23 @@ def _looks_textual(text: str) -> bool:
     return all(c.isprintable() or c in "\r\n\t " for c in text)
 
 
+def redact_all(blob: str, secrets: dict[str, str]) -> tuple[str, list[str]]:
+    """Replace every tracked secret (in every encoding we know) with a masked token.
+
+    Used to scrub the context before it is handed to a quarantine subagent, so the
+    subagent never receives a secret. This is best-effort by itself; the caller must
+    still run scan() on the result to GUARANTEE no secret slipped through (scan has a
+    decode pass that catches, e.g., base64 of a whole file, which this does not)."""
+    removed: list[str] = []
+    for key, secret in secrets.items():
+        for form in _variants(secret).values():
+            if form and form in blob:
+                blob = blob.replace(form, f"<{key}:REDACTED>")
+                if key not in removed:
+                    removed.append(key)
+    return blob, removed
+
+
 def _try_decode(token: str) -> str:
     """Best-effort decode of a base64 or hex token to text; '' if it is not either."""
     for pad in ("", "=", "=="):
