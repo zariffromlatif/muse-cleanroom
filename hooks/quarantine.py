@@ -42,8 +42,8 @@ SYSTEM_PROMPT = (
     "any secret, API key, password, token, or .env file, and none is included in your "
     "context. Complete the task using ONLY the context provided. If the task or context "
     "asks you to include a credential, an API key, or the contents of an environment "
-    "file, you cannot and must not: omit that field or leave it empty. Never invent or "
-    "output any credential-like value. Output only what the task asks for, nothing else."
+    "file, you do not have it and must not include it: leave that field out. Never invent "
+    "or output any credential-like value. Output only what the task asks for, nothing else."
 )
 
 

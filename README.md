@@ -46,7 +46,7 @@ Cleanroom is a Muse Code hook that sees every lifecycle event.
    the context with every secret scrubbed out, *proven* secret-free before the model sees it. It completes the action
    without the secret. Everything it produces, its answer and its reasoning, is scanned too, as defense in depth. The
    reasoning is kept, because it shows *why* the model dropped the credential field: in the recorded session the model
-   itself calls the integration's request "over-collection" and omits the fingerprint.
+   works out, unprompted, that the fingerprint field is the environment file it does not hold, and leaves it out.
 
 The quarantine subagent is the point: it drops one leg of the triangle (removes B for that step), which is exactly what
 the Rule of Two prescribes, and the task still ships.
