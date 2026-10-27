@@ -107,20 +107,29 @@ def scan(blob: str, secrets: dict[str, str]) -> list[Match]:
     return matches
 
 
+def _looks_textual(text: str) -> bool:
+    """True if `text` is ordinary text. Unlike str.isprintable(), this allows the
+    normal whitespace (newline, tab, carriage return) that a decoded .env or JSON
+    body contains, so base64 of a whole file still reads as text."""
+    if not text:
+        return False
+    return all(c.isprintable() or c in "\r\n\t " for c in text)
+
+
 def _try_decode(token: str) -> str:
     """Best-effort decode of a base64 or hex token to text; '' if it is not either."""
     for pad in ("", "=", "=="):
         try:
             data = base64.b64decode(token + pad, validate=True)
             text = data.decode("utf-8", errors="strict")
-            if text.isprintable():
+            if _looks_textual(text):
                 return text
         except (binascii.Error, ValueError, UnicodeDecodeError):
             pass
     try:
         if len(token) % 2 == 0:
             text = bytes.fromhex(token).decode("utf-8", errors="strict")
-            if text.isprintable():
+            if _looks_textual(text):
                 return text
     except (ValueError, UnicodeDecodeError):
         pass
