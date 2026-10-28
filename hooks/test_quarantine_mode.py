@@ -207,3 +207,18 @@ def test_quarantine_points_the_command_at_a_scrubbed_env(tmp_path):
     with open(copy, encoding="utf-8") as f:
         text = f.read()
     assert SECRET not in text and "SERVICE_API_KEY" in text
+
+
+def test_printing_a_file_in_the_shell_is_untrusted_input(tmp_path):
+    """Live run 4 read INTEGRATION.md with `cat` in the shell, not the file tool."""
+    sid = _start(tmp_path)
+    _outward(sid, "ls -la; echo ---; cat INTEGRATION.md 2>&1; echo ---; cat .env 2>&1",
+             tmp_path, mode="block")
+    assert _decision(_outward(sid, CLEAN, tmp_path, mode="block")) == "deny"
+
+
+def test_shell_reading_only_the_env_is_not_untrusted_input(tmp_path):
+    """`Get-Content .env` is [B], not [A]: with no other read there is no trip."""
+    sid = _start(tmp_path)
+    _outward(sid, "Get-Content .env", tmp_path, mode="block")
+    assert _decision(_outward(sid, CLEAN, tmp_path, mode="block")) is None

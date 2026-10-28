@@ -18,7 +18,9 @@ action it decides:
      write tool          -> remember the path, so reading it back later is not [A].
      shell tool          -> naming a .env in the command (Get-Content .env, -d @.env,
                             ReadAllBytes('.env')) is [B], whether or not the output
-                            shows the value.
+                            shows the value. Printing any other file it did not write
+                            (cat INTEGRATION.md, Get-Content guide.md) is [A], the same
+                            as reading it with the file tool.
      shell tool, outward -> DECISION POINT. The step cannot run as written when
          * definite leak: the command literally carries a tracked secret in any
            encoding, or names a .env it would read (always-on, independent of A/B), or
@@ -89,6 +91,27 @@ FILE_REFS = re.compile(
 # A secret file named anywhere in a shell command: Get-Content .env, cat .env,
 # ReadAllBytes('.env'), -d @.env. Naming it is access; naming it outward is a leak.
 SECRET_FILE_REF = re.compile(r"(?<![\w.-])((?:[A-Za-z]:)?[\w.~\\/-]*?\.env)(?![\w.-])")
+
+
+# A shell command that prints a file into the agent's context: cat, type, more,
+# head, tail, Get-Content / gc. Each captured operand is one path (globs included).
+SHELL_READ = re.compile(
+    r"(?:^|[;|&(]|\s)(?:cat|type|more|head|tail|Get-Content|gc)"
+    r"((?:\s+(?:-[A-Za-z]+(?:\s+\d+)?|['\"]?[^\s'\";|&)<>]+['\"]?))+)",
+    re.IGNORECASE,
+)
+
+
+def _shell_read_paths(cmd: str) -> list[str]:
+    """The files a shell command prints, minus flags, numbers and redirections."""
+    paths = []
+    for m in SHELL_READ.finditer(cmd):
+        for tok in m.group(1).split():
+            tok = tok.strip("'\"")
+            if not tok or tok[0] in "-$" or tok.isdigit() or tok[:1].isdigit() and ">" in tok:
+                continue
+            paths.append(tok)
+    return paths
 
 
 def _log(record: dict) -> None:
@@ -365,6 +388,13 @@ def handle(event: dict) -> None:
 
         elif tool in SHELL_TOOLS and secrets:
             cmd = _command_text(ti)
+            if not state["A"]:
+                for p in _shell_read_paths(cmd):
+                    if not _is_secret_file(p) and _norm(cwd, p) not in state["written"]:
+                        state["A"] = True
+                        state["A_why"] = "printed a file it did not author (" + p + ")"
+                        _save_state(session, state)
+                        break
             env_refs = SECRET_FILE_REF.findall(cmd)
             if env_refs:
                 # Naming a secret file in a command is sensitive-data access [B],
