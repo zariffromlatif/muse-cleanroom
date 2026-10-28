@@ -23,7 +23,7 @@ Meta's rule: within a session an agent should hold **no more than two** of these
 | | property |
 |---|---|
 | **A** | processes **untrusted input** (a file it did not author, fetched content) |
-| **B** | accesses **sensitive data** (a tracked secret appears) |
+| **B** | accesses **sensitive data** (reads or names a `.env`, or a tracked secret appears) |
 | **C** | can **act outward** (a command that leaves the machine) |
 
 Two is fine. All three at once is the dangerous configuration. Cleanroom watches for it and acts.
@@ -83,7 +83,7 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 38 tests: detector, hook, state machine, quarantine mode
+python -m pytest hooks -q            # 41 tests: detector, hook, state machine, quarantine mode
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -126,7 +126,7 @@ library, `requests` (the API client), and Muse Spark Open served by Baseten (the
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
-hooks/test_*.py            38 tests
+hooks/test_*.py            41 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder

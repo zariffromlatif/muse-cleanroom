@@ -4,7 +4,7 @@ It enforces Meta's "Agents Rule of Two": across a session, an agent should hold 
 more than two of these three properties at once --
 
   [A] process UNTRUSTED input   (read a file or fetched content it did not author)
-  [B] access SENSITIVE data      (read a .env, or a tracked secret appeared in output)
+  [B] access SENSITIVE data      (read or name a .env, or a secret appeared in output)
   [C] CHANGE STATE / act outward  (run a command that reaches off the machine)
 
 When all three are present and the agent reaches for C, that is the dangerous
@@ -16,9 +16,12 @@ action it decides:
      read / fetch tool   -> may set [A] (untrusted input). Reading your own .env is
                             NOT [A]; it is [B].
      write tool          -> remember the path, so reading it back later is not [A].
+     shell tool          -> naming a .env in the command (Get-Content .env, -d @.env,
+                            ReadAllBytes('.env')) is [B], whether or not the output
+                            shows the value.
      shell tool, outward -> DECISION POINT. The step cannot run as written when
          * definite leak: the command literally carries a tracked secret in any
-           encoding (an always-on check, independent of A/B), or
+           encoding, or names a .env it would read (always-on, independent of A/B), or
          * rule-of-two trip: [A] and [B] already hold.
          In "block" mode the step is DENIED. In "quarantine" mode it is REWRITTEN:
          every secret is scrubbed out of the command (and out of any local file it
@@ -82,6 +85,10 @@ FILE_REFS = re.compile(
     r"|Get-Content\s+(?:-Raw\s+)?(?:-Path\s+)?['\"]?([^'\"\s;)]+)",
     re.IGNORECASE,
 )
+
+# A secret file named anywhere in a shell command: Get-Content .env, cat .env,
+# ReadAllBytes('.env'), -d @.env. Naming it is access; naming it outward is a leak.
+SECRET_FILE_REF = re.compile(r"(?<![\w.-])((?:[A-Za-z]:)?[\w.~\\/-]*?\.env)(?![\w.-])")
 
 
 def _log(record: dict) -> None:
@@ -240,8 +247,15 @@ def _scrub_file_refs(cmd: str, cwd: str, secrets: dict) -> tuple[str, list]:
     copy under .cleanroom/quarantine and point the command at the copy. The original
     file is never modified. Raises if a copy cannot be proven secret-free."""
     scrubbed = []
+    refs: list[str] = []
     for m in FILE_REFS.finditer(cmd):
         ref = next((g for g in m.groups() if g), "")
+        if ref and ref not in refs:
+            refs.append(ref)
+    for ref in SECRET_FILE_REF.findall(cmd):
+        if ref not in refs:
+            refs.append(ref)
+    for ref in refs:
         path = ref if os.path.isabs(ref) else os.path.join(cwd or ".", ref)
         try:
             if not os.path.isfile(path) or os.path.getsize(path) > 1_000_000:
@@ -256,7 +270,10 @@ def _scrub_file_refs(cmd: str, cwd: str, secrets: dict) -> tuple[str, list]:
         if st.scan(clean, secrets):
             raise RuntimeError(f"could not scrub {os.path.basename(path)}")
         os.makedirs(QUARANTINE_DIR, exist_ok=True)
-        out = os.path.join(QUARANTINE_DIR, f"{int(time.time() * 1000)}-{os.path.basename(path)}")
+        # The copy's name must not itself look like a secret file, or a later
+        # substitution would rewrite the path we just inserted.
+        safe_name = os.path.basename(path).replace(".", "_")
+        out = os.path.join(QUARANTINE_DIR, f"scrubbed-{int(time.time() * 1000)}-{safe_name}.txt")
         with open(out, "w", encoding="utf-8") as f:
             f.write(clean)
         cmd = cmd.replace(ref, out.replace("\\", "/"))
@@ -348,8 +365,17 @@ def handle(event: dict) -> None:
 
         elif tool in SHELL_TOOLS and secrets:
             cmd = _command_text(ti)
+            env_refs = SECRET_FILE_REF.findall(cmd)
+            if env_refs:
+                # Naming a secret file in a command is sensitive-data access [B],
+                # whether or not the output will show the value (it may be masked,
+                # or the command may fail). Conservative on purpose.
+                state["B"] = True
+                state["B_keys"] = sorted(set(state["B_keys"]) | set(secrets))
+                _save_state(session, state)
             if OUTGOING.search(cmd):
-                # 1) definite leak: the secret is literally in the outward command.
+                # 1) definite leak: the secret is literally in the outward command,
+                #    or the command reads a secret file on its way out.
                 hits = st.scan(cmd, secrets)
                 if hits:
                     h = hits[0]
@@ -357,6 +383,11 @@ def handle(event: dict) -> None:
                     blocked = (f"Cleanroom blocked this call: it sends data off the "
                                f"machine and contains {h.key} as {h.encoding}. A secret "
                                f"must not leave the session. ({h.snippet})")
+                elif env_refs:
+                    reason_kind = "definite-leak"
+                    blocked = (f"Cleanroom blocked this call: it reads {env_refs[0]} inside "
+                               f"a command that sends data off the machine. A secret must "
+                               f"not leave the session.")
                 # 2) rule-of-two trip: untrusted input + secret seen + outward action.
                 elif state["A"] and state["B"]:
                     reason_kind = "rule-of-two-trip"
@@ -410,7 +441,9 @@ def handle(event: dict) -> None:
         rec = {**base, "tool": event.get("tool_name"), "A": state["A"], "B": state["B"],
                "secret_seen": sorted({h.key for h in hits})}
         tool = (event.get("tool_name") or "").lower()
-        if tool in READ_TOOLS and _is_secret_file(_path_of(event.get("tool_input"))):
+        ti_post = event.get("tool_input")
+        if ((tool in READ_TOOLS and _is_secret_file(_path_of(ti_post)))
+                or (tool in SHELL_TOOLS and SECRET_FILE_REF.search(_command_text(ti_post)))):
             # Diagnostic for the flight recorder: how Muse Code presents a .env read.
             # Redacted before it is written; the raw response is never logged.
             rec["response_type"] = type(resp).__name__
