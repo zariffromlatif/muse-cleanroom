@@ -176,30 +176,38 @@ def _split(result) -> tuple[str, str]:
 def meta_generate(prompt: str, max_tokens: int = 3000) -> tuple[str, str]:
     """Call a Meta model (Muse Spark Open) on Baseten as the subagent.
 
+    Standard library only: the hook runs under whichever `python` Muse Code finds on
+    PATH, with a cleared environment, so it must not depend on any package.
     Muse Spark is a reasoning model: it spends tokens on `reasoning_content` and puts
     the answer in `content`. The budget must cover both, so max_tokens is generous.
     Returns `(answer, reasoning)`; the reasoning is what the demo shows."""
-    import requests  # local import so tests never need the network
+    import urllib.error
+    import urllib.request
 
     key = api_key()
     if not key:
         raise RuntimeError("no model key: set BASETEN_API_KEY or write .cleanroom/baseten_api_key")
-    resp = requests.post(
-        BASETEN_URL,
+    body = json.dumps({
+        "model": BASETEN_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        BASETEN_URL, data=body, method="POST",
         headers={"Authorization": f"Api-Key {key}", "Content-Type": "application/json"},
-        json={
-            "model": BASETEN_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "max_tokens": max_tokens,
-            "temperature": 0,
-        },
-        timeout=90,
     )
-    resp.raise_for_status()
-    msg = resp.json()["choices"][0]["message"]
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"model call failed: HTTP {exc.code}") from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"model call failed: {exc.reason}") from None
+    msg = data["choices"][0]["message"]
     reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
     return (msg.get("content") or ""), reasoning
 

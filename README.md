@@ -91,8 +91,8 @@ python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_
 
 The live quarantine needs a Baseten key: `BASETEN_API_KEY` in the environment, or, for the hook
 (Muse Code clears a hook's environment), the same key in `.cleanroom/baseten_api_key`, which is
-gitignored. The hook and detector use only the Python standard library; `requests` is only for
-the quarantine model call.
+gitignored. Everything runs on the Python standard library; there is nothing to install for the hook
+itself (`pytest` is only for the tests).
 
 ## Install into Muse Code
 
@@ -117,7 +117,7 @@ through Muse Code's own approval; the hook never auto-approves anything.
 
 Everything here was written during the building period (27 Oct – 4 Nov 2026), from an empty folder; the commit history is
 the record. Third-party software used but not written here: Muse Code (the agent being protected), the Python standard
-library, `requests` (the API client), and Muse Spark Open served by Baseten (the quarantine model).
+library, and Muse Spark Open served by Baseten (the quarantine model).
 
 ## Layout
 
