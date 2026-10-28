@@ -71,6 +71,26 @@ SHELL_TOOLS = {"powershell", "bash", "shell"}
 READ_TOOLS = {"read_file", "open_file", "read", "view_file", "cat"}
 WRITE_TOOLS = {"write_file", "create_file", "edit_file", "apply_patch", "str_replace"}
 FETCH_TOOLS = {"fetch", "web_fetch", "http_get", "web_search", "browse", "open_url"}
+POLICY_FILE = os.path.join(HOOK_DIR, "policy.json")
+
+
+def _load_policy():
+    """Which tool exercises which Rule-of-Two property, declared per tool in policy.json: the
+    "declare a Rule of Two configuration" mechanism Meta's post proposes. The built-in sets
+    above are the fallback when the file is missing or malformed."""
+    try:
+        with open(POLICY_FILE, encoding="utf-8") as f:
+            tools = json.load(f)["tools"]
+        by_role = {}
+        for tool, role in tools.items():
+            by_role.setdefault(str(role), set()).add(str(tool).lower())
+        return (by_role.get("shell", set()), by_role.get("read", set()),
+                by_role.get("write", set()), by_role.get("fetch", set()))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS
+
+
+SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS = _load_policy()
 
 # Signs that a command reaches outside the machine.
 # Bare command names count only as a command word, never as the tail of a cmdlet:

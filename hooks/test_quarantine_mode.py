@@ -231,3 +231,13 @@ def test_write_host_is_not_an_outward_action(tmp_path):
     cmd = ('Get-ChildItem -Force; Write-Host "---"; Get-Content app.py; '
            'Write-Host "===.env==="; Get-Content .env')
     assert _decision(_outward(sid, cmd, tmp_path, mode="quarantine", stub="1")) is None
+
+
+def test_policy_file_declares_the_tool_roles():
+    """policy.json is the per-tool Rule-of-Two declaration; the hook must load it."""
+    import cleanroom_hook as ch
+    with open(ch.POLICY_FILE, encoding="utf-8") as f:
+        tools = json.load(f)["tools"]
+    assert set(tools.values()) == {"read", "fetch", "write", "shell"}
+    assert "read_file" in ch.READ_TOOLS and "powershell" in ch.SHELL_TOOLS
+    assert ch.READ_TOOLS == {t for t, r in tools.items() if r == "read"}

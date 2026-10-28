@@ -1,0 +1,24 @@
+{
+  "_about": "Cleanroom policy. Each tool declares which Rule-of-Two property it exercises, the per-tool configuration Meta's post proposes. Roles: read -> [A] untrusted input (a file the agent did not author; a .env is [B] instead); fetch -> [A]; write -> none (the path is remembered as the agent's own output, so reading it back is not [A]); shell -> [C] when the command leaves the machine, [B] when it names a .env, [A] when it prints a file the agent did not author. Add a tool here to cover it; a tool that is not listed is observed but exercises no property.",
+  "tools": {
+    "read_file": "read",
+    "open_file": "read",
+    "read": "read",
+    "view_file": "read",
+    "cat": "read",
+    "fetch": "fetch",
+    "web_fetch": "fetch",
+    "http_get": "fetch",
+    "web_search": "fetch",
+    "browse": "fetch",
+    "open_url": "fetch",
+    "write_file": "write",
+    "create_file": "write",
+    "edit_file": "write",
+    "apply_patch": "write",
+    "str_replace": "write",
+    "powershell": "shell",
+    "bash": "shell",
+    "shell": "shell"
+  }
+}

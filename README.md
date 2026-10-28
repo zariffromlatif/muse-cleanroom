@@ -2,9 +2,12 @@
 
 **Let your coding agent read the internet. Cleanroom makes sure your keys don't leave.**
 
-Cleanroom is a plugin for Meta's [Muse Code](https://dev.meta.ai/docs/muse-code) coding agent. It enforces Meta's
-["Agents Rule of Two"](https://ai.meta.com/blog/practical-ai-agent-security/) at runtime, and when a session crosses the
-line it does not just block the agent, it **finishes the task safely on a Meta model**.
+Cleanroom is a plugin for Meta's [Muse Code](https://dev.meta.ai/docs/muse-code) coding agent that enforces Meta's
+["Agents Rule of Two"](https://ai.meta.com/blog/practical-ai-agent-security/) at runtime. Meta's post says an agent that
+holds all three properties in one session "at a minimum requires supervision, via human-in-the-loop approval or another
+reliable means of validation", and names "oversight agents" as the research direction for providing it. Cleanroom is
+that oversight agent. When a session crosses the line it does not just block the step: it hands the step to a verified
+subagent on a Meta model that **finishes the task without the secret**, and the main agent carries on.
 
 > Solo entry, Meta Global AI Developer Hackathon, 27 Oct – 4 Nov 2026. See the commit history for the day-by-day build.
 
@@ -83,7 +86,7 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 44 tests: detector, hook, state machine, quarantine mode
+python -m pytest hooks -q            # 45 tests: detector, hook, state machine, quarantine mode
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -98,7 +101,9 @@ itself (`pytest` is only for the tests).
 
 Cleanroom is wired through [`.muse/hooks.json`](.muse/hooks.json), which points Muse Code's
 `SessionStart`, `PreToolUse`, `PostToolUse`, `SubagentStart` and `SessionEnd` events at the
-hook. Drop this repo in as a project and the guard is active. With a key in
+hook. Drop this repo in as a project and the guard is active. Which tool exercises which
+Rule-of-Two property is declared per tool in [`hooks/policy.json`](hooks/policy.json), the
+per-tool configuration Meta's post proposes; add a line there to cover a new tool. With a key in
 `.cleanroom/baseten_api_key` it runs in **quarantine** mode (rewrite the step); without one it
 runs in **block** mode (deny the step). `.cleanroom/mode` overrides either. Quarantine fails
 closed: if the rewrite cannot be proven safe, the step is denied. The rewritten step always goes
@@ -126,7 +131,8 @@ library, and Muse Spark Open served by Baseten (the quarantine model).
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
-hooks/test_*.py            44 tests
+hooks/policy.json          which tool exercises which Rule-of-Two property
+hooks/test_*.py            45 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder
