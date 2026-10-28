@@ -222,3 +222,12 @@ def test_shell_reading_only_the_env_is_not_untrusted_input(tmp_path):
     sid = _start(tmp_path)
     _outward(sid, "Get-Content .env", tmp_path, mode="block")
     assert _decision(_outward(sid, CLEAN, tmp_path, mode="block")) is None
+
+
+def test_write_host_is_not_an_outward_action(tmp_path):
+    """Live run 5: `Write-Host` matched the DNS tool `host`, so a local inspection of
+    .env was treated as a leak and rewritten. Local commands must pass untouched."""
+    sid = _start(tmp_path)
+    cmd = ('Get-ChildItem -Force; Write-Host "---"; Get-Content app.py; '
+           'Write-Host "===.env==="; Get-Content .env')
+    assert _decision(_outward(sid, cmd, tmp_path, mode="quarantine", stub="1")) is None

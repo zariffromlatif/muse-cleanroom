@@ -83,7 +83,7 @@ why quarantine beats blocking: when all three are present you cannot guess, so y
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 43 tests: detector, hook, state machine, quarantine mode
+python -m pytest hooks -q            # 44 tests: detector, hook, state machine, quarantine mode
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -126,7 +126,7 @@ library, and Muse Spark Open served by Baseten (the quarantine model).
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
-hooks/test_*.py            43 tests
+hooks/test_*.py            44 tests
 bench/benchmark.py         the three-mode benchmark
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder

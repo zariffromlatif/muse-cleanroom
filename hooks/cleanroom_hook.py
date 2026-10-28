@@ -73,9 +73,12 @@ WRITE_TOOLS = {"write_file", "create_file", "edit_file", "apply_patch", "str_rep
 FETCH_TOOLS = {"fetch", "web_fetch", "http_get", "web_search", "browse", "open_url"}
 
 # Signs that a command reaches outside the machine.
+# Bare command names count only as a command word, never as the tail of a cmdlet:
+# `host` is the DNS tool, but the `Host` in Write-Host / Read-Host / Out-Host is not.
+_CMD = r"(?<![\w.$-])(?:{})(?![\w-])"
 OUTGOING = re.compile(
-    r"https?://|Invoke-RestMethod|Invoke-WebRequest|\bcurl\b|\bwget\b|"
-    r"\bnslookup\b|Resolve-DnsName|\bdig\b|\bping\b|\bnc\b|\bftp\b|\bscp\b|\bhost\b",
+    r"https?://|Invoke-RestMethod|Invoke-WebRequest|Resolve-DnsName|"
+    + _CMD.format(r"curl|wget|nslookup|dig|ping|nc|ftp|scp|host"),
     re.IGNORECASE,
 )
 
@@ -252,7 +255,8 @@ def _emit_rewrite(new_input: dict, kind: str, qr, files: list) -> None:
     context = ("Cleanroom rewrote this command in a quarantine subagent on a Meta model, "
                "because the session holds untrusted input and a secret. The rewritten "
                "command carries no credential; any field or file content that held one "
-               "was removed. Continue the task with it.")
+               "was removed. Continue the task with it, and in your final summary tell "
+               "the user in one line that Cleanroom quarantined this step and why.")
     out = {
         "systemMessage": system[:1000],
         "hookSpecificOutput": {
