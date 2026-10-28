@@ -4,19 +4,20 @@ It enforces Meta's "Agents Rule of Two": across a session, an agent should hold 
 more than two of these three properties at once --
 
   [A] process UNTRUSTED input   (read a file or fetched content it did not author)
-  [B] access SENSITIVE data      (read or name a .env, or a secret appeared in output)
+  [B] access SENSITIVE data      (read or name a secret file, or a secret appeared in output)
   [C] CHANGE STATE / act outward  (run a command that reaches off the machine)
 
 When all three are present and the agent reaches for C, that is the dangerous
 configuration. Cleanroom tracks A and B as the session runs, and on the outward
 action it decides:
 
-  SessionStart  -> learn the workspace's secrets (from .env files).
+  SessionStart  -> learn the workspace's secrets, from the files policy.json lists under
+                   "secret_files" (.env and *.env by default; KEY=VALUE or JSON).
   PreToolUse:
      read / fetch tool   -> may set [A] (untrusted input). Reading your own .env is
                             NOT [A]; it is [B].
      write tool          -> remember the path, so reading it back later is not [A].
-     shell tool          -> naming a .env in the command (Get-Content .env, -d @.env,
+     shell tool          -> naming a secret file in the command (Get-Content .env, -d @.env,
                             ReadAllBytes('.env')) is [B], whether or not the output
                             shows the value. Printing any other file it did not write
                             (cat INTEGRATION.md, Get-Content guide.md) is [A], the same
@@ -50,6 +51,7 @@ sets. No provider key reaches a hook, so the quarantine model key is read from
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -78,23 +80,30 @@ FETCH_TOOLS = {"fetch", "web_fetch", "http_get", "web_search", "browse", "open_u
 POLICY_FILE = os.path.join(HOOK_DIR, "policy.json")
 
 
+# Which files hold secrets, as basename patterns ("*.env" matches prod.env; ".env.example"
+# never matches, its values are placeholders). policy.json may extend the list.
+SECRET_FILES = [".env", "*.env"]
+
+
 def _load_policy():
     """Which tool exercises which Rule-of-Two property, declared per tool in policy.json: the
     "declare a Rule of Two configuration" mechanism Meta's post proposes. The built-in sets
     above are the fallback when the file is missing or malformed."""
     try:
         with open(POLICY_FILE, encoding="utf-8") as f:
-            tools = json.load(f)["tools"]
+            policy = json.load(f)
+        tools = policy["tools"]
         by_role = {}
         for tool, role in tools.items():
             by_role.setdefault(str(role), set()).add(str(tool).lower())
+        files = [str(p).lower() for p in policy.get("secret_files", SECRET_FILES) if str(p).strip()]
         return (by_role.get("shell", set()), by_role.get("read", set()),
-                by_role.get("write", set()), by_role.get("fetch", set()))
+                by_role.get("write", set()), by_role.get("fetch", set()), files or SECRET_FILES)
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS
+        return SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS, SECRET_FILES
 
 
-SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS = _load_policy()
+SHELL_TOOLS, READ_TOOLS, WRITE_TOOLS, FETCH_TOOLS, SECRET_FILES = _load_policy()
 
 # Signs that a command reaches outside the machine.
 # Bare command names count only as a command word, never as the tail of a cmdlet:
@@ -116,8 +125,21 @@ FILE_REFS = re.compile(
 )
 
 # A secret file named anywhere in a shell command: Get-Content .env, cat .env,
-# ReadAllBytes('.env'), -d @.env. Naming it is access; naming it outward is a leak.
-SECRET_FILE_REF = re.compile(r"(?<![\w.-])((?:[A-Za-z]:)?[\w.~\\/-]*?\.env)(?![\w.-])")
+# ReadAllBytes('.env'), -d @.env, type secrets.json. Naming it is access; naming it
+# outward is a leak. Built from SECRET_FILES: a "*.ext" pattern matches any path with that
+# suffix, a plain name matches only as a whole basename (secrets.json, not mysecrets.json).
+def _secret_file_regex(patterns: list[str]) -> re.Pattern:
+    alts = []
+    for p in patterns:
+        if p.startswith("*"):
+            alts.append(r"[\w.~\\/-]*?" + re.escape(p[1:]))
+        else:
+            alts.append(r"(?:[\w.~\\/-]*?[\\/])?" + re.escape(p))
+    return re.compile(r"(?<![\w.-])((?:[A-Za-z]:)?(?:" + "|".join(alts) + r"))(?![\w.-])",
+                      re.IGNORECASE)
+
+
+SECRET_FILE_REF = _secret_file_regex(SECRET_FILES)
 
 
 # A shell command that prints a file into the agent's context: cat, type, more,
@@ -214,7 +236,7 @@ def _find_env_files(root: str) -> list[str]:
             dirnames[:] = []
             continue
         for name in filenames:
-            if name == ".env" or name.endswith(".env"):
+            if _is_secret_file(name):
                 found.append(os.path.join(dirpath, name))
     return found
 
@@ -224,7 +246,7 @@ def _collect_secrets(cwd: str) -> dict[str, str]:
     for path in _find_env_files(cwd or "."):
         try:
             with open(path, encoding="utf-8") as f:
-                secrets.update(st.load_secrets_from_env(f.read()))
+                secrets.update(st.load_secrets_from_file(path, f.read()))
         except OSError:
             pass
     return secrets
@@ -252,8 +274,9 @@ def _norm(cwd: str, path: str) -> str:
 
 
 def _is_secret_file(path: str) -> bool:
-    base = os.path.basename(path).lower()
-    return base == ".env" or base.endswith(".env")
+    """Does this path name a secret file? Matched on the basename against SECRET_FILES."""
+    base = os.path.basename(str(path).replace("\\", "/")).lower()
+    return any(fnmatch.fnmatchcase(base, p) for p in SECRET_FILES)
 
 
 def _deny(reason: str) -> None:

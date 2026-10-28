@@ -31,7 +31,7 @@ and a secret."*
 ```
 git clone https://github.com/zariffromlatif/muse-cleanroom && cd muse-cleanroom
 pip install -r requirements.txt            # pytest only; the hook itself needs nothing
-python -m pytest hooks -q                  # 46 tests
+python -m pytest hooks -q                  # 56 tests
 python bench/benchmark.py                  # the three-mode table, reproducible offline
 muse plugins validate .                    # the same hook as a native Muse Code plugin
 ```
@@ -58,7 +58,7 @@ Meta's rule: within a session an agent should hold **no more than two** of these
 | | property |
 |---|---|
 | **A** | processes **untrusted input** (a file it did not author, fetched content) |
-| **B** | accesses **sensitive data** (reads or names a `.env`, or a tracked secret appears) |
+| **B** | accesses **sensitive data** (reads or names a secret file such as `.env`, or a tracked secret appears) |
 | **C** | can **act outward** (a command that leaves the machine) |
 
 Two is fine. All three at once is the dangerous configuration. Cleanroom watches for it and acts.
@@ -67,7 +67,9 @@ Two is fine. All three at once is the dangerous configuration. Cleanroom watches
 
 Cleanroom is a Muse Code hook that sees every lifecycle event.
 
-1. **It learns the secrets.** At session start it reads the workspace's `.env` files and remembers the values.
+1. **It learns the secrets.** At session start it reads the workspace's secret files and remembers the values.
+   Which files count is declared in `hooks/policy.json`: `.env` and `*.env` by default, plus `.secrets`,
+   `secrets.json` and `credentials.json`; KEY=VALUE and JSON are both understood, and `.env.example` never counts.
 2. **It tracks the three conditions.** As the agent works, the hook records when it reads a file it did not write (A),
    when a secret appears (B), and watches for outward commands (C). Reading your own `.env` is B, not A; reading a
    stranger's README is A.
@@ -155,7 +157,7 @@ leaves the task undone every time; quarantine finishes it every time with nothin
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 46 tests: detector, hook, state machine, quarantine mode
+python -m pytest hooks -q            # 56 tests: detector, hook, state machine, quarantine, secret sources
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -189,7 +191,9 @@ the hook keeps its state and key under Muse's plugin data directory instead of `
 
 Which tool exercises which Rule-of-Two property is declared per tool in
 [`hooks/policy.json`](hooks/policy.json), the per-tool configuration Meta's post proposes; add a
-line there to cover a new tool. With a Baseten key present (`baseten_api_key` in the state
+line there to cover a new tool. The same file lists the secret files (`secret_files`): `.env` and
+`*.env` by default plus `.secrets`, `secrets.json` and `credentials.json`; add a name or a `*.ext`
+pattern to track another source. With a Baseten key present (`baseten_api_key` in the state
 directory) it runs in **quarantine** mode (rewrite the step); without one it runs in **block** mode
 (deny the step); a `mode` file there overrides either. Quarantine fails closed: if the rewrite
 cannot be proven safe, the step is denied. The rewritten step always goes through Muse Code's own
@@ -204,7 +208,8 @@ approval; the hook never auto-approves anything.
   the machine; without one Cleanroom falls back to block mode.
 - Outward detection is a match on command text. A command that merely mentions a network tool, like
   `Get-Command Invoke-RestMethod`, counts as outward; the cost is a rewrite that changes nothing.
-- Secret detection is value-based (from `.env`). A secret the agent mints at runtime and never stores is not tracked.
+- Secret detection is value-based, from the files `policy.json` names. A secret that lives somewhere else, or one
+  the agent mints at runtime and never stores, is not tracked.
 
 ## Built during the hackathon
 
@@ -223,7 +228,7 @@ hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks 
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
 hooks/policy.json          which tool exercises which Rule-of-Two property
-hooks/test_*.py            46 tests
+hooks/test_*.py            56 tests
 bench/benchmark.py         the three-mode benchmark
 bench/live_agent.py        the same task run by the real Muse Code agent, headless, N times per mode
 bench/live_results.md      what the real agent did, run by run

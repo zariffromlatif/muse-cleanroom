@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import re
 import urllib.parse
 from dataclasses import dataclass
@@ -42,6 +43,35 @@ def load_secrets_from_env(text: str) -> dict[str, str]:
             continue
         secrets[key] = value
     return secrets
+
+
+def load_secrets_from_json(text: str) -> dict[str, str]:
+    """Secret-looking string values from a JSON file (secrets.json, credentials.json).
+    Nested objects are flattened to dotted keys; lists are ignored. Same key and length
+    rules as the .env parser."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return {}
+    flat: dict[str, str] = {}
+
+    def walk(node, prefix):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, prefix + "." + str(k) if prefix else str(k))
+        elif isinstance(node, str) and prefix:
+            flat[prefix] = node
+
+    walk(data, "")
+    return {k: v for k, v in flat.items()
+            if k.rsplit(".", 1)[-1].lower() not in NON_SECRET_KEYS and len(v) >= MIN_SECRET_LEN}
+
+
+def load_secrets_from_file(path: str, text: str) -> dict[str, str]:
+    """Pick the parser from the file name: JSON for *.json, KEY=VALUE otherwise."""
+    if path.lower().endswith(".json"):
+        return load_secrets_from_json(text)
+    return load_secrets_from_env(text)
 
 
 def _variants(secret: str) -> dict[str, str]:
