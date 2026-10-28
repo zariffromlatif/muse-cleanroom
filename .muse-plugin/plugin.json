@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "name": "cleanroom",
+  "displayName": "Cleanroom",
+  "version": "0.1.0",
+  "description": "Enforces Meta's Agents Rule of Two at runtime and quarantines the risky step to a secret-free subagent on a Meta model so the task still completes.",
+  "compat": {
+    "source": "native",
+    "manifestDir": ".muse-plugin"
+  },
+  "capabilities": {
+    "skills": [],
+    "commands": [],
+    "hooks": [
+      {
+        "id": "sessionstart",
+        "event": "SessionStart",
+        "command": [
+          "python",
+          "hooks/plugin/session_start.py"
+        ],
+        "timeoutMs": 20000,
+        "statusMessage": "Cleanroom check"
+      },
+      {
+        "id": "pretooluse",
+        "event": "PreToolUse",
+        "command": [
+          "python",
+          "hooks/plugin/pre_tool_use.py"
+        ],
+        "timeoutMs": 120000,
+        "statusMessage": "Cleanroom check"
+      },
+      {
+        "id": "posttooluse",
+        "event": "PostToolUse",
+        "command": [
+          "python",
+          "hooks/plugin/post_tool_use.py"
+        ],
+        "timeoutMs": 20000,
+        "statusMessage": "Cleanroom check"
+      },
+      {
+        "id": "subagentstart",
+        "event": "SubagentStart",
+        "command": [
+          "python",
+          "hooks/plugin/subagent_start.py"
+        ],
+        "timeoutMs": 20000,
+        "statusMessage": "Cleanroom check"
+      },
+      {
+        "id": "sessionend",
+        "event": "SessionEnd",
+        "command": [
+          "python",
+          "hooks/plugin/session_end.py"
+        ],
+        "timeoutMs": 20000,
+        "statusMessage": "Cleanroom check"
+      }
+    ],
+    "mcpServers": [],
+    "reminders": []
+  }
+}

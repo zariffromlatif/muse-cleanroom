@@ -99,15 +99,32 @@ itself (`pytest` is only for the tests).
 
 ## Install into Muse Code
 
-Cleanroom is wired through [`.muse/hooks.json`](.muse/hooks.json), which points Muse Code's
-`SessionStart`, `PreToolUse`, `PostToolUse`, `SubagentStart` and `SessionEnd` events at the
-hook. Drop this repo in as a project and the guard is active. Which tool exercises which
-Rule-of-Two property is declared per tool in [`hooks/policy.json`](hooks/policy.json), the
-per-tool configuration Meta's post proposes; add a line there to cover a new tool. With a key in
-`.cleanroom/baseten_api_key` it runs in **quarantine** mode (rewrite the step); without one it
-runs in **block** mode (deny the step). `.cleanroom/mode` overrides either. Quarantine fails
-closed: if the rewrite cannot be proven safe, the step is denied. The rewritten step always goes
-through Muse Code's own approval; the hook never auto-approves anything.
+Two ways; pick one.
+
+**As a project hook.** [`.muse/hooks.json`](.muse/hooks.json) points Muse Code's `SessionStart`,
+`PreToolUse`, `PostToolUse`, `SubagentStart` and `SessionEnd` events at the hook. Drop this repo
+in as a project, trust the workspace, and the guard is active.
+
+**As a plugin.** The repo is also a native Muse Code plugin bundle
+([`.muse-plugin/plugin.json`](.muse-plugin/plugin.json)):
+
+```
+muse plugins install <path to this repo>
+muse plugins approve cleanroom
+muse plugins hook test cleanroom:pretooluse --fixture fixtures/block-outward-env-read.json
+```
+
+The last line runs the hook through Muse Code's own tester against a committed fixture and prints
+the decision Muse derived (`permission_decision: deny`); see [`fixtures/`](fixtures/). As a plugin,
+the hook keeps its state and key under Muse's plugin data directory instead of `.cleanroom/`.
+
+Which tool exercises which Rule-of-Two property is declared per tool in
+[`hooks/policy.json`](hooks/policy.json), the per-tool configuration Meta's post proposes; add a
+line there to cover a new tool. With a Baseten key present (`baseten_api_key` in the state
+directory) it runs in **quarantine** mode (rewrite the step); without one it runs in **block** mode
+(deny the step); a `mode` file there overrides either. Quarantine fails closed: if the rewrite
+cannot be proven safe, the step is denied. The rewritten step always goes through Muse Code's own
+approval; the hook never auto-approves anything.
 
 ## Honest limits
 
@@ -127,7 +144,10 @@ library, and Muse Spark Open served by Baseten (the quarantine model).
 ## Layout
 
 ```
-.muse/hooks.json           wires Cleanroom into Muse Code's lifecycle events
+.muse/hooks.json           wires Cleanroom into Muse Code's lifecycle events (project hook)
+.muse-plugin/plugin.json   the same hook packaged as a native Muse Code plugin
+hooks/plugin/              one entry script per event (the plugin format wants one file each)
+fixtures/                  inputs for `muse plugins hook test`
 hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks and trips
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)

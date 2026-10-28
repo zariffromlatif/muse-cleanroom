@@ -61,7 +61,9 @@ import secret_tracker as st  # noqa: E402
 import quarantine as q       # noqa: E402
 
 REPO_ROOT = os.path.dirname(HOOK_DIR)
-LOG_DIR = os.path.join(REPO_ROOT, ".cleanroom")
+# As a project hook, state lives in the repo. As an installed plugin the package copy is
+# read-only, so Muse Code provides a data directory instead.
+LOG_DIR = os.environ.get("MUSE_PLUGIN_DATA_DIR") or os.path.join(REPO_ROOT, ".cleanroom")
 EVENTS_FILE = os.path.join(LOG_DIR, "events.jsonl")
 STATE_DIR = os.path.join(LOG_DIR, "state")
 MODE_FILE = os.path.join(LOG_DIR, "mode")

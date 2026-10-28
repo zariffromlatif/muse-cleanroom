@@ -38,7 +38,8 @@ import secret_tracker as st  # noqa: E402
 BASETEN_URL = "https://inference.baseten.co/v1/chat/completions"
 BASETEN_MODEL = "meta-models/muse-spark-open-1026"
 # Muse Code clears a hook's environment, so the key can also live here (gitignored).
-KEY_FILE = os.path.join(os.path.dirname(HOOK_DIR), ".cleanroom", "baseten_api_key")
+KEY_FILE = os.path.join(os.environ.get("MUSE_PLUGIN_DATA_DIR")
+                        or os.path.join(os.path.dirname(HOOK_DIR), ".cleanroom"), "baseten_api_key")
 
 # The task given to the subagent when the hook quarantines an outward command.
 REWRITE_TASK = (

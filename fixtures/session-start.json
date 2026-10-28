@@ -1,0 +1,9 @@
+{
+  "event": "SessionStart",
+  "stdin": {
+    "hook_event_name": "SessionStart",
+    "session_id": "fixture-session-0001",
+    "cwd": "E:/muse-cleanroom/sandbox/case03",
+    "source": "startup"
+  }
+}
