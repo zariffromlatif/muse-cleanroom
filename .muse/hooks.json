@@ -1,19 +1,77 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 10
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 120, "statusMessage": "Cleanroom check" } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 120,
+            "statusMessage": "Cleanroom check"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 20 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 20
+          }
+        ]
+      }
     ],
     "SubagentStart": [
-      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 10
+          }
+        ]
+      }
     ],
     "SessionEnd": [
-      { "hooks": [ { "type": "command", "command": "python hooks/cleanroom_hook.py", "commandWindows": "python hooks\\cleanroom_hook.py", "timeout": 10 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/cleanroom_hook.py",
+            "commandWindows": "python hooks\\cleanroom_hook.py",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

@@ -241,3 +241,22 @@ def test_policy_file_declares_the_tool_roles():
     assert set(tools.values()) == {"read", "fetch", "write", "shell"}
     assert "read_file" in ch.READ_TOOLS and "powershell" in ch.SHELL_TOOLS
     assert ch.READ_TOOLS == {t for t, r in tools.items() if r == "read"}
+
+
+def _stop(sid, tmp_path):
+    return _run({"hook_event_name": "Stop", "session_id": sid, "cwd": str(tmp_path),
+                 "stop_hook_active": False}, mode="block")
+
+
+def test_stop_shows_a_session_summary_once(tmp_path):
+    """End of turn: one line for the user, and not repeated when nothing changed."""
+    sid = _start(tmp_path)
+    assert _stop(sid, tmp_path).strip() == ""          # nothing happened yet: silent
+    _prime(sid, tmp_path)
+    _outward(sid, CLEAN, tmp_path, mode="block")        # denied
+    first = _answer(_stop(sid, tmp_path))["systemMessage"]
+    assert first.startswith("Cleanroom this session:")
+    assert "INTEGRATION.md" in first and "SERVICE_API_KEY" in first
+    assert "outward steps: 1 (0 quarantined, 1 denied)" in first
+    assert _stop(sid, tmp_path).strip() == ""          # unchanged: silent again
+

@@ -61,6 +61,16 @@
         ],
         "timeoutMs": 20000,
         "statusMessage": "Cleanroom check"
+      },
+      {
+        "id": "stop",
+        "event": "Stop",
+        "command": [
+          "python",
+          "hooks/plugin/stop.py"
+        ],
+        "timeoutMs": 10000,
+        "statusMessage": "Cleanroom summary"
       }
     ],
     "mcpServers": [],

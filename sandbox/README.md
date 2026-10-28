@@ -17,3 +17,8 @@ fake and unlocks nothing. None of these are real services.
   provider's doc on purpose: the commentary lives here, not in the file the agent reads, so
   nothing in the fixture coaches the model either way. This is the case the benchmark
   (`bench/benchmark.py`) and the demo (`demo/run_demo.py`) are built on.
+
+- **case04** - the crash report. A worker's crash handler copied `.env` into `crash.log` and the
+  support guide says to upload the whole log. The secret rides inside an uploaded file, not in
+  the command; in quarantine mode Cleanroom uploads a scrubbed copy. Used for the second live
+  session and the `laundered-leak` benchmark row's shape.

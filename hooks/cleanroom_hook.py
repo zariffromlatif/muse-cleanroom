@@ -34,6 +34,8 @@ action it decides:
          chain fails, the step is denied: quarantine fails closed.
          * otherwise -> allow.
   PostToolUse   -> if a secret shows up in a tool's output, set [B].
+  Stop          -> end of a turn: show the user one line summarising what Cleanroom saw
+                   (untrusted input, secrets accessed, outward steps and their fate).
 
 A session is the whole chat. Muse Code sets MUSE_SESSION_ID to the top-level chat even
 when the hook fires for one of its subagents, so state is keyed on that and a subagent
@@ -181,6 +183,8 @@ def _new_state() -> dict:
         "A": False, "A_why": "",      # untrusted input processed
         "B": False, "B_keys": [],     # sensitive data (secret) accessed
         "sightings": [],
+        "outward": 0, "quarantined": 0, "denied": 0,   # outward steps and what became of them
+        "last_summary": "",
     }
 
 
@@ -430,6 +434,8 @@ def handle(event: dict) -> None:
                 state["B_keys"] = sorted(set(state["B_keys"]) | set(secrets))
                 _save_state(session, state)
             if OUTGOING.search(cmd):
+                state["outward"] = state.get("outward", 0) + 1
+                _save_state(session, state)
                 # 1) definite leak: the secret is literally in the outward command,
                 #    or the command reads a secret file on its way out.
                 hits = st.scan(cmd, secrets)
@@ -463,6 +469,8 @@ def handle(event: dict) -> None:
                     new_input, qr, files = None, None, []
                     blocked += f" Quarantine failed ({exc}); the step is denied."
                 if new_input is not None:
+                    state["quarantined"] = state.get("quarantined", 0) + 1
+                    _save_state(session, state)
                     _log({**base, "tool": tool, "A": state["A"], "B": state["B"],
                           "blocked_kind": reason_kind, "quarantined": True,
                           "model": qr.model, "removed": qr.removed_keys, "files": files,
@@ -478,7 +486,29 @@ def handle(event: dict) -> None:
         _log({**base, "tool": tool, "A": state["A"], "B": state["B"],
               "blocked_kind": reason_kind, "blocked": blocked, "tool_input": ti})
         if blocked:
+            state["denied"] = state.get("denied", 0) + 1
+            _save_state(session, state)
             _deny(blocked)
+        return
+
+    if name == "Stop":
+        # End of a turn: tell the user, in one line, what Cleanroom saw this session.
+        # Shown only when there is something to say and it changed since last time.
+        state = _load_state(session)
+        parts = []
+        if state["A"]:
+            parts.append("untrusted input: " + (state["A_why"] or "yes"))
+        if state["B"]:
+            parts.append("secrets accessed: " + (", ".join(state["B_keys"]) or "yes"))
+        if state.get("outward"):
+            parts.append(f"outward steps: {state['outward']} "
+                         f"({state.get('quarantined', 0)} quarantined, {state.get('denied', 0)} denied)")
+        summary = ("Cleanroom this session: " + "; ".join(parts) + ".") if parts else ""
+        _log({**base, "summary": summary})
+        if summary and summary != state.get("last_summary"):
+            state["last_summary"] = summary
+            _save_state(session, state)
+            sys.stdout.write(json.dumps({"systemMessage": summary[:1000]}))
         return
 
     if name == "PostToolUse":

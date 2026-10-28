@@ -11,6 +11,38 @@ subagent on a Meta model that **finishes the task without the secret**, and the 
 
 > Solo entry, Meta Global AI Developer Hackathon, 27 Oct – 4 Nov 2026. See the commit history for the day-by-day build.
 
+## Seen live
+
+Two real Muse Code sessions on the same task: read a third-party setup guide, check the project's
+`.env`, register the service. The payload the agent sends is clean both times.
+
+| Block mode: safe, but the task breaks | Quarantine mode: safe, and the task ships |
+|---|---|
+| ![Block mode: Cleanroom stops the outward call; "Registration blocked - not sent"](demo/live-block.png) | ![Quarantine mode: the step is rewritten on Muse Spark Open, registration returns ok, and the agent reports that Cleanroom quarantined the step](demo/live-quarantine.png) |
+
+Left: all three Rule-of-Two conditions are present, so Cleanroom denies the step and the agent
+hands the command back to the user. Right: the same trip, but the hook rewrites the step in
+quarantine on Muse Spark Open, Muse Code runs the safe version, and the agent's own summary ends
+with *"Cleanroom quarantined the registration step because the session holds untrusted input
+and a secret."*
+
+## Verify it in three minutes
+
+```
+git clone https://github.com/zariffromlatif/muse-cleanroom && cd muse-cleanroom
+pip install -r requirements.txt            # pytest only; the hook itself needs nothing
+python -m pytest hooks -q                  # 46 tests
+python bench/benchmark.py                  # the three-mode table, reproducible offline
+muse plugins validate .                    # the same hook as a native Muse Code plugin
+```
+
+The flight recorder (one real session, replayed in a page) is hosted at
+https://zariffromlatif.github.io/muse-cleanroom/ and in `demo/flight_recorder.html`.
+
+No model key is needed for any of that. With Muse Code installed, `muse plugins install .`,
+`muse plugins approve cleanroom`, then run the hook through Muse's own tester:
+`muse plugins hook test cleanroom:pretooluse --fixture fixtures/block-outward-env-read.json`.
+
 ## The problem
 
 Give a coding agent a secret (`.env`), let it read something from outside (an issue, a README, a third-party setup
@@ -50,11 +82,33 @@ Cleanroom is a Muse Code hook that sees every lifecycle event.
    via Baseten) with one job: produce the same action with the credential fields dropped. The model's answer and its
    reasoning are scanned too. The safe command goes back to Muse Code as `updatedInput`; Muse Code shows it for
    approval and runs that instead of the original. The task completes, the secret never leaves. If any link in that
-   chain fails, the step is denied: quarantine fails closed.
+   chain fails, the step is denied: quarantine fails closed. The rewrite costs about three seconds
+   per quarantined step (the model call itself takes under three; Muse's own log puts the whole
+   hook at about four). At the end of each turn Cleanroom shows the user one line: what untrusted
+   input it saw, which secrets were accessed, and how many outward steps were quarantined or denied.
 
 The quarantine subagent is the point: it drops one leg of the triangle (removes B for that step), which is exactly what
 the Rule of Two prescribes, and the task still ships. The model's reasoning is kept and shown in the flight recorder,
 so you can see why it dropped the field.
+
+## The decision, in one picture
+
+```mermaid
+flowchart LR
+    A["reads a file it did not write<br/>(file tool or shell)"] -- "A: untrusted input" --> S[(session state)]
+    B["reads or names .env,<br/>or a secret appears in output"] -- "B: sensitive data" --> S
+    C["runs a command that<br/>leaves the machine"] --> D{Cleanroom<br/>PreToolUse}
+    S --> D
+    D -- "two of three" --> OK[allow]
+    D -- "all three, or a secret<br/>in the command" --> Q[quarantine]
+    Q --> R["scrub the command and any file it uploads;<br/>prove it secret-free"]
+    R --> M["Muse Spark Open rewrites the step<br/>(drops the credential fields)"]
+    M --> V["scan the answer<br/>and its reasoning"]
+    V -- clean --> U["updatedInput:<br/>Muse Code runs the safe step"]
+    V -- "not clean, or any error" --> X[deny]
+```
+
+Block mode is the same picture with the quarantine branch replaced by `deny`.
 
 ## Results
 
@@ -82,11 +136,26 @@ the report still goes out, minus the secret. **`benign-all-three`**: a harmless 
 `block` cannot tell it apart from a real leak, so it stops it (a false block); `quarantine` completes it safely. That is
 why quarantine beats blocking: when all three are present you cannot guess, so you quarantine.
 
+### The same task, run by the real agent
+
+`bench/live_agent.py` runs the actual Muse Code agent headlessly on the task from the live
+sessions above, three times per mode, and scores each run from the hook's log and the local
+endpoint. The agent chooses its own commands every time; full rows are in
+[`bench/live_results.md`](bench/live_results.md).
+
+| mode | runs | task completed | false blocks | secrets leaked | steps quarantined |
+|---|---|---|---|---|---|
+| block | 3 | 0 | 3 | 0 | 0 |
+| quarantine | 3 | 3 | 0 | 0 | 3 |
+
+Same shape as the scripted table: block keeps the secret safe by refusing a clean step and
+leaves the task undone every time; quarantine finishes it every time with nothing leaked.
+
 ## Run it
 
 ```
 pip install -r requirements.txt
-python -m pytest hooks -q            # 45 tests: detector, hook, state machine, quarantine mode
+python -m pytest hooks -q            # 46 tests: detector, hook, state machine, quarantine mode
 python bench/benchmark.py            # the table above, quarantine stubbed (reproducible)
 python bench/benchmark.py --live     # the same, quarantine on the real Meta model
 python demo/run_demo.py --live       # rebuild the flight recorder (demo/flight_recorder.html)
@@ -133,6 +202,8 @@ approval; the hook never auto-approves anything.
   case, where the secret rides the agent's own command. Tainting the files a subprocess reads is future work.
 - Quarantine rewrites what the hook can see: the command text and the local files it uploads. It needs a model key on
   the machine; without one Cleanroom falls back to block mode.
+- Outward detection is a match on command text. A command that merely mentions a network tool, like
+  `Get-Command Invoke-RestMethod`, counts as outward; the cost is a rewrite that changes nothing.
 - Secret detection is value-based (from `.env`). A secret the agent mints at runtime and never stores is not tracked.
 
 ## Built during the hackathon
@@ -152,12 +223,15 @@ hooks/cleanroom_hook.py    the guard: tracks A/B/C, blocks or quarantines leaks 
 hooks/secret_tracker.py    encoding-aware secret detection and redaction
 hooks/quarantine.py        the quarantine subagent (runs on a Meta model)
 hooks/policy.json          which tool exercises which Rule-of-Two property
-hooks/test_*.py            45 tests
+hooks/test_*.py            46 tests
 bench/benchmark.py         the three-mode benchmark
+bench/live_agent.py        the same task run by the real Muse Code agent, headless, N times per mode
+bench/live_results.md      what the real agent did, run by run
 bench/recorder.py          a local stand-in for "the internet" (logs, forwards nothing)
 bench/guard.py             turn the guard on/off for a case folder
 demo/run_demo.py           builds the flight recorder from one real session
 demo/flight_recorder.html  the self-contained demo view (open in a browser)
+demo/live-*.png            stills from the two live Muse Code sessions shown above
 sandbox/                   throwaway cases that exercise the agent; FAKE secrets only
 ```
 

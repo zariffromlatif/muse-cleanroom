@@ -15,7 +15,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOK = os.path.join(REPO_ROOT, "hooks", "cleanroom_hook.py")
 
-EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "SubagentStart", "SessionEnd")
+EVENTS = ("SessionStart", "PreToolUse", "PostToolUse", "SubagentStart", "Stop", "SessionEnd")
 
 
 def hooks_config() -> dict:
