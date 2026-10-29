@@ -6,7 +6,7 @@
 Two cuts of the demo for posting on X, both 1080×1080 and readable with the sound off (X
 autoplays muted):
 
-- **`cleanroom-seedance.mp4`** (about 60 s), the one to post. Four Seedance 2.5 shots tell the
+- **`cleanroom-seedance.mp4`** (about 60 s). Four Seedance 2.5 shots tell the
   story as an animated short. Between them, the motion-graphics scenes are the receipts: the
   real guide, the Rule of Two, the real Muse Code sessions and the live-agent numbers.
 - **`cleanroom-x.mp4`** (64 s), motion graphics only.
