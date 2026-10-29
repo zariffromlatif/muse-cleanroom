@@ -8,3 +8,4 @@ __pycache__/
 sandbox/*/.muse/
 .cleanroom/
 promo/x-video/out/
+promo/launch/out/
