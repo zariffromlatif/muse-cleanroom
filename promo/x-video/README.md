@@ -1,22 +1,36 @@
-# The X video
+# The X videos
 
-`cleanroom-x.mp4` is a 64-second, 1080×1080 cut of the demo for posting on X. It is built to
-work with the sound off, because X autoplays muted: every beat is on screen as text.
+Two cuts of the demo for posting on X, both 1080×1080 and readable with the sound off (X
+autoplays muted):
+
+- **`cleanroom-seedance.mp4`** (about 60 s), the one to post. Four Seedance 2.5 shots tell the
+  story as an animated short. Between them, the motion-graphics scenes are the receipts: the
+  real guide, the Rule of Two, the real Muse Code sessions and the live-agent numbers.
+- **`cleanroom-x.mp4`** (64 s), motion graphics only.
+
+## The Seedance cut
 
 | time | beat |
 |---|---|
-| 0:00 | Hook: the setup guide (`sandbox/case03/INTEGRATION.md`) asks for a base64 of `.env` |
-| 0:05 | A helpful agent follows it; the "fingerprint" decodes to the (fake) keys. Leaked. |
-| 0:15 | Meta's Agents Rule of Two: A, then B, then C lights up |
-| 0:25 | Block mode, real Muse Code session: safe, but 0 of 3 runs finished the task |
-| 0:32 | Cleanroom: scrub, rewrite on Muse Spark Open, prove secret-free, run. `{"ok": true}` |
-| 0:46 | The real quarantine session and the agent's own summary line |
-| 0:52 | Live-agent results: block 0/3 done, Cleanroom 3/3 done, 0 leaked either way |
-| 0:58 | Close: name, line, repo URL |
+| 0:00 | Seedance: an eager little robot seals a glowing key in an envelope and posts it. "Your AI agent is one setup guide away from leaking your API keys." |
+| 0:05 | Seedance: a gloved hand snatches the envelope out of a data storm. "No hacker needed." |
+| 0:09 | Receipts: the guide's `fingerprint` line, the base64 decoding to the (fake) keys, LEAKED |
+| 0:17 | Meta's Agents Rule of Two lights up A, B, C |
+| 0:23 | Block mode, real Muse Code session: safe, but 0 of 3 runs finished the task |
+| 0:27 | Cleanroom title card |
+| 0:30 | Seedance: in a green airlock, an arm locks the key in a safe and the envelope flies on |
+| 0:35 | Seedance: the robot hugs the key under a green check. "…and the task still ships." |
+| 0:39 | Receipts: scrub, Muse Spark Open rewrite, proven secret-free, `{"ok": true}`; the real session; 3/3 vs 0/3 |
+| 0:54 | Close: name, line, repo URL |
 
-Every number and quote comes from the repo: `bench/live_results.md`, `demo/live-*.png`,
-`demo/session.json` (the model's reasoning) and the 56 tests. The leak scene is the
-benchmark's guard-off trace and says so on screen. The keys are the sandbox's fake ones.
+The animated shots are a metaphor and look like one. Every number, quote and screenshot in
+the receipts comes from the repo (`bench/live_results.md`, `demo/live-*.png`,
+`demo/session.json`, the 56 tests). The leak scene is the benchmark's guard-off trace and
+says so on screen. The keys are the sandbox's fake ones.
+
+How the shots were made: Nano Banana Pro drew the robot and one keyframe per shot. Seedance 2.5
+animated each keyframe (omni-reference, start image, 1:1), first as 480p drafts and then
+finalized at 1080p. The finished shots are in `shots/`, so rebuilding needs no credits.
 
 ## Post copy
 
@@ -47,11 +61,18 @@ the hackathon platform.
 ## Rebuild
 
 ```
-./build.sh
+python3 cut.py      # the Seedance cut -> cleanroom-seedance.mp4
+./build.sh          # the graphics-only cut -> cleanroom-x.mp4
 ```
 
-Needs `python3` with `numpy`, `node` with Playwright's Chromium, and `ffmpeg`. It synthesizes
-`soundtrack.py` (no samples, nothing licensed), renders `video.html` frame by frame through
-`render.mjs`, and muxes them at -14 LUFS. To preview without rendering, open `video.html` in a
-browser; `video.html?t=12.5` freezes on one moment. Scene timings live in `render()` in
-`video.html`, and the sound cues in `effects()` in `soundtrack.py` use the same times.
+Needs `python3` with `numpy`, `node` with Playwright's Chromium, and `ffmpeg`.
+- `video.html` draws every graphics frame as a function of time. `render.mjs` steps it into
+  ffmpeg.
+- `soundtrack.py` synthesizes the score and effects, with no samples and nothing licensed.
+- `cut.js` is the Seedance edit: which shot plays when, and which stretch of `video.html`
+  plays between shots, at what speed. `cut.py` renders the graphics with alpha (`video.html?cut`),
+  lays the shots underneath, re-times the score to the new cut, and mixes in the shots' own
+  sound.
+
+To preview without rendering, open `video.html` in a browser; `video.html?t=12.5` freezes on one
+moment.
