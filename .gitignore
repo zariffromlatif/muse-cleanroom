@@ -7,3 +7,4 @@ __pycache__/
 .muse/prompts.log
 sandbox/*/.muse/
 .cleanroom/
+promo/x-video/out/
