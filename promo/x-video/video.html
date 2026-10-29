@@ -155,6 +155,14 @@ body{font-family:"Inter",sans-serif;color:var(--text);-webkit-font-smoothing:ant
 #e4 span{display:inline-block;font-family:"JetBrains Mono";font-size:32px;padding:18px 34px;border-radius:16px;border:2px solid #34e3a488;
   background:#34e3a414;color:#e6fff5}
 #e5{top:930px;font-size:23px;color:var(--dim)}
+
+/* ?cut: captions over the Seedance shots (the shots themselves are composited by cut.py) */
+#aicap{position:absolute;inset:0;opacity:0;z-index:40}
+#aicapbg{position:absolute;left:0;right:0;top:0;height:440px;
+  background:linear-gradient(180deg,#07090Df0 0%,#07090Dc8 48%,#07090D00 100%)}
+#aicapt{text-shadow:0 4px 24px #000a}
+#aicapt .w{display:inline-block;will-change:transform}
+#aicapt .w.r{color:var(--red)} #aicapt .w.g{color:var(--green)}
 </style>
 </head>
 <body>
@@ -334,10 +342,12 @@ body{font-family:"Inter",sans-serif;color:var(--text);-webkit-font-smoothing:ant
     <div class="endl" id="e5">Built for the Meta Global AI Developer Hackathon</div>
   </div>
 
+  <div id="aicap"><div id="aicapbg"></div><div class="cap" id="aicapt"></div></div>
   <div id="flash"></div>
   <div id="bar"></div>
 </div>
 
+<script src="cut.js"></script>
 <script>
 const DURATION = 64.0;
 const $ = id => document.getElementById(id);
@@ -589,14 +599,73 @@ function render(t) {
   else fl.style.opacity = 0;
 }
 
-window.render = render;
-window.DURATION = DURATION;
-// Preview: play in real time unless the renderer drives it (?still or ?t=12.3).
+// ---------- ?cut: the Seedance cut (cut.js) ----------
+const renderBase = render;   // window.render is rebound below, and with it the global `render`
+// Graphics segments replay this timeline faster; Seedance segments draw only their caption on a
+// transparent page, and cut.py lays the shot underneath.
+const SEGS = [];
+for (const s of (window.CUT ? CUT.segments : [])) {
+  const start = SEGS.length ? SEGS[SEGS.length - 1].start + SEGS[SEGS.length - 1].len : 0;
+  // whole frames, so the shots cut.py lays underneath line up exactly
+  SEGS.push({ ...s, start, len: Math.round((s.type === "ai" ? s.dur : (s.to - s.from) / s.speed) * 30) / 30 });
+}
+const CUT_DURATION = SEGS.length ? SEGS[SEGS.length - 1].start + SEGS[SEGS.length - 1].len : 0;
+
+function capHTML(s) {
+  const out = []; let cls = "";
+  for (const tok of s.split(/(<\/?[rg]>|\s+)/)) {
+    if (!tok) continue;
+    if (/^<[rg]>$/.test(tok)) { cls = tok[1]; continue; }
+    if (/^<\/[rg]>$/.test(tok)) { cls = ""; continue; }
+    if (/^\s+$/.test(tok)) { out.push(" "); continue; }
+    out.push(`<span class="w ${cls}">${tok}</span>`);
+  }
+  return out.join("");
+}
+
+function setOpaque(on) {
+  const bg = on ? "" : "transparent";
+  document.documentElement.style.background = bg;
+  document.body.style.background = bg;
+  $("stage").style.background = on ? "" : "transparent";
+  $("grid").style.display = on ? "" : "none";
+  $("tint").style.display = on ? "" : "none";
+}
+
+function renderCut(t) {
+  const i = Math.max(0, SEGS.findIndex(s => t < s.start + s.len));
+  const seg = SEGS[i], lt = t - seg.start;
+  if (seg.type === "gfx") {
+    setOpaque(true);
+    $("aicap").style.opacity = 0;
+    renderBase(seg.from + lt * seg.speed);
+  } else {
+    setOpaque(false);
+    document.querySelectorAll(".scene").forEach(e => { e.style.opacity = 0; e.style.visibility = "hidden"; });
+    $("flash").style.opacity = 0;
+    const el = $("aicapt");
+    if (el.dataset.seg !== String(i)) { el.innerHTML = capHTML(seg.cap); el.dataset.seg = String(i); }
+    $("aicap").style.opacity = 1;
+    // the opening caption is fully there on frame one, so it doubles as the thumbnail
+    [...el.children].forEach((w, k) => {
+      const a = i === 0 ? -1 : .05 + k * .065, x = eob(p(lt, a, a + .3));
+      w.style.opacity = cl(x * 1.4);
+      w.style.transform = `translateY(${(1 - x) * 26}px) scale(${lerp(.86, 1, x)})`;
+    });
+  }
+  $("bar").style.width = (t / CUT_DURATION * 100) + "%";
+}
+
 const q = new URLSearchParams(location.search);
-if (q.has("t")) render(parseFloat(q.get("t")));
+const CUTMODE = q.has("cut");
+window.render = CUTMODE ? renderCut : renderBase;
+window.DURATION = CUTMODE ? CUT_DURATION : DURATION;
+window.SEGS = SEGS;
+// Preview: play in real time unless the renderer drives it (?still or ?t=12.3).
+if (q.has("t")) window.render(parseFloat(q.get("t")));
 else if (!q.has("still")) {
   const t0 = performance.now();
-  (function loop() { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })();
+  (function loop() { window.render(((performance.now() - t0) / 1000) % window.DURATION); requestAnimationFrame(loop); })();
 }
 </script>
 </body>

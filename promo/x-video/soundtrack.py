@@ -14,14 +14,25 @@ import numpy as np
 
 SR = 44100
 DUR = 64.0
-N = int(SR * DUR)
 rng = np.random.default_rng(7)
-L = np.zeros(N)
-R = np.zeros(N)
+TIME_MAP = None     # cut.py remaps this score's cue times onto its own timeline
+
+
+def reset(duration: float) -> None:
+    global DUR, N, L, R
+    DUR, N = duration, int(SR * duration)
+    L, R = np.zeros(N), np.zeros(N)
+
+
+reset(DUR)
 
 
 def add(x: np.ndarray, t: float, gain: float = 1.0, pan: float = 0.0) -> None:
     """Mix mono buffer x in at time t. pan -1 (left) .. 1 (right), equal-power."""
+    if TIME_MAP is not None:
+        t = TIME_MAP(t)
+        if t is None:
+            return
     i = int(t * SR)
     if i >= N or len(x) == 0:
         return
@@ -346,9 +357,7 @@ def effects():
     add(ding(hz("C6"), 2.0, 0.22), 60.2)
 
 
-def main(out: str) -> None:
-    music()
-    effects()
+def write(out: str) -> None:
     mix = np.stack([L, R], axis=1)
     fade = np.ones(N)
     fade[-int(2.2 * SR):] = np.linspace(1, 0, int(2.2 * SR)) ** 1.5
@@ -363,6 +372,12 @@ def main(out: str) -> None:
         w.setframerate(SR)
         w.writeframes(pcm.tobytes())
     print(f"wrote {out} ({DUR:.1f}s)")
+
+
+def main(out: str) -> None:
+    music()
+    effects()
+    write(out)
 
 
 if __name__ == "__main__":

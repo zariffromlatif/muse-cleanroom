@@ -2,6 +2,8 @@
 //
 //   node render.mjs --stills 0,6,12.6,22,40 out/   one PNG per time, for checking layout
 //   node render.mjs out/frames.mp4                 the whole video, silent (build.sh adds audio)
+//   CUT=1 node render.mjs out/overlay.mov          the Seedance cut's graphics and captions, with
+//                                                  alpha where the shots go (cut.py composites them)
 //
 // Each worker owns a contiguous slice of frames and writes its own segment; the
 // segments are joined losslessly at the end.
@@ -16,8 +18,11 @@ let playwright;
 try { playwright = require("playwright"); } catch { playwright = require("/opt/node-tools/node_modules/playwright"); }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PAGE = pathToFileURL(path.join(HERE, "video.html")).href + "?still";
+const CUT = !!process.env.CUT;
+const PAGE = pathToFileURL(path.join(HERE, "video.html")).href + (CUT ? "?still&cut" : "?still");
 const FPS = 30, SIZE = 1080;
+// With alpha, frames go into a PNG-in-MOV stream; otherwise straight to H.264.
+const ENCODE = CUT ? ["-c:v", "png", "-pix_fmt", "rgba"] : ["-c:v", "libx264", "-preset", "medium", "-crf", "12", "-pix_fmt", "yuv420p"];
 
 async function openPage(browser) {
   const page = await browser.newPage({ viewport: { width: SIZE, height: SIZE }, deviceScaleFactor: 1 });
@@ -37,11 +42,10 @@ function ffmpeg(args) {
 
 async function renderSegment(browser, from, to, file) {
   const page = await openPage(browser);
-  const ff = ffmpeg(["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-i", "-",
-    "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-pix_fmt", "yuv420p", file]);
+  const ff = ffmpeg(["-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(FPS), "-i", "-", ...ENCODE, file]);
   for (let i = from; i < to; i++) {
     await page.evaluate(t => window.render(t), i / FPS);
-    const png = await page.screenshot({ type: "png" });
+    const png = await page.screenshot({ type: "png", omitBackground: CUT });
     if (!ff.stdin.write(png)) await new Promise(r => ff.stdin.once("drain", r));
   }
   ff.stdin.end();
@@ -59,7 +63,7 @@ try {
     const page = await openPage(browser);
     for (const t of times) {
       await page.evaluate(t => window.render(t), t);
-      writeFileSync(path.join(out, `still-${t.toFixed(2)}.png`), await page.screenshot({ type: "png" }));
+      writeFileSync(path.join(out, `still-${t.toFixed(2)}.png`), await page.screenshot({ type: "png", omitBackground: CUT }));
     }
   } else {
     const out = path.resolve(args[0] || path.join(HERE, "out", "frames.mp4"));
@@ -75,7 +79,7 @@ try {
     for (let w = 0; w < workers; w++) {
       const from = w * per, to = Math.min(total, from + per);
       if (from >= to) break;
-      const f = path.join(tmp, `seg${w}.mp4`);
+      const f = path.join(tmp, `seg${w}${path.extname(out)}`);
       files.push(f);
       jobs.push(renderSegment(browser, from, to, f));
     }
