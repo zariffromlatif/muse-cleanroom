@@ -25,7 +25,8 @@ benchmark's guard-off trace and says so on screen. Every key shown is fake.
 - `shots/`: three Seedance 2.5 shots, 1080p, 16:9. Nano Banana Pro drew each keyframe, and
   Seedance animated it from that start image, first as a 480p draft and then finalized. Seedance
   rendered the dissolve as the dust re-forming into the key, so `dissolve.mp4` is that shot
-  played in reverse.
+  played in reverse. `cube.mp4` is the first 2.6 s of its shot in 2x slow motion (motion
+  interpolated), so the camera's push-in never reaches the title under the cube.
 - `launch.html`: the graphics, drawn as a function of time. It is transparent wherever a shot
   plays (the `SHOTS` list). Open it in a browser to preview; `launch.html?t=48` holds one moment.
 - `score.py`: the score, synthesized with numpy (felt piano, pads, soft pulse, one reverb), with
