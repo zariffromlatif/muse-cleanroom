@@ -11,6 +11,8 @@ subagent on a Meta model that **finishes the task without the secret**, and the 
 
 > Solo entry, Meta Global AI Developer Hackathon, 27 Oct – 4 Nov 2026. See the commit history for the day-by-day build.
 
+**Demo video (2:50):** https://youtu.be/V9oeDHIdqKM
+
 ## Seen live
 
 Two real Muse Code sessions on the same task: read a third-party setup guide, check the project's
