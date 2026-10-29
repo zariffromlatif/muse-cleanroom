@@ -1,5 +1,8 @@
 # The X videos
 
+> The 16:9 launch film in [`../launch/`](../launch/) (`cleanroom-launch.mp4`) supersedes these
+> two square cuts as the video to post. They stay here as alternates.
+
 Two cuts of the demo for posting on X, both 1080×1080 and readable with the sound off (X
 autoplays muted):
 
